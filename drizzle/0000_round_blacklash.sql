@@ -29,6 +29,7 @@ CREATE TABLE `sources` (
 	`added_at` text DEFAULT (datetime('now'))
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `sources_url_unique` ON `sources` (`url`);--> statement-breakpoint
 CREATE TABLE `taste_entries` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`title` text NOT NULL,

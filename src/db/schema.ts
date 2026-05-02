@@ -4,7 +4,7 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 export const sources = sqliteTable("sources", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  url: text("url").notNull(),
+  url: text("url").notNull().unique(),
   feed_url: text("feed_url"),
   category: text("category"),
   active: integer("active").default(1),
