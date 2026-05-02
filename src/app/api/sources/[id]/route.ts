@@ -1,0 +1,69 @@
+import { db } from "@/db";
+import { sources } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const sourceId = parseInt(id, 10);
+    if (isNaN(sourceId)) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
+    const body = await req.json();
+    const { name, url, feed_url, category, active } = body;
+
+    const updateData: Partial<typeof sources.$inferInsert> = {};
+    if (name !== undefined) updateData.name = name;
+    if (url !== undefined) updateData.url = url;
+    if (feed_url !== undefined) updateData.feed_url = feed_url;
+    if (category !== undefined) updateData.category = category;
+    if (active !== undefined) updateData.active = active ? 1 : 0;
+
+    const [updated] = await db
+      .update(sources)
+      .set(updateData)
+      .where(eq(sources.id, sourceId))
+      .returning();
+
+    if (!updated) {
+      return NextResponse.json({ error: "Source not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("PUT /api/sources/[id]:", error);
+    return NextResponse.json({ error: "Failed to update source" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const sourceId = parseInt(id, 10);
+    if (isNaN(sourceId)) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
+    const [deleted] = await db
+      .delete(sources)
+      .where(eq(sources.id, sourceId))
+      .returning();
+
+    if (!deleted) {
+      return NextResponse.json({ error: "Source not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/sources/[id]:", error);
+    return NextResponse.json({ error: "Failed to delete source" }, { status: 500 });
+  }
+}
