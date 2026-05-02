@@ -1,0 +1,72 @@
+import { config } from "dotenv";
+config({ path: ".env.local" });
+
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
+import { sources } from "../src/db/schema";
+
+const SOURCES = [
+  // Tech
+  { name: "The Verge", url: "https://www.theverge.com", feed_url: "https://www.theverge.com/rss/index.xml", category: "tech" },
+  { name: "TechCrunch", url: "https://techcrunch.com", feed_url: "https://techcrunch.com/feed/", category: "tech" },
+  { name: "Ars Technica", url: "https://arstechnica.com", feed_url: "https://feeds.arstechnica.com/arstechnica/index", category: "tech" },
+  { name: "MIT Technology Review", url: "https://www.technologyreview.com", feed_url: "https://www.technologyreview.com/feed/", category: "tech" },
+  { name: "Engadget", url: "https://www.engadget.com", feed_url: "https://www.engadget.com/rss.xml", category: "tech" },
+  { name: "The Next Web", url: "https://thenextweb.com", feed_url: "https://thenextweb.com/feed/", category: "tech" },
+  { name: "Wired", url: "https://www.wired.com", feed_url: "https://www.wired.com/feed/rss", category: "tech" },
+
+  // Nieuws — internationaal
+  { name: "The Guardian", url: "https://www.theguardian.com", feed_url: "https://www.theguardian.com/world/rss", category: "nieuws" },
+  { name: "BBC News", url: "https://www.bbc.com/news", feed_url: "https://feeds.bbci.co.uk/news/rss.xml", category: "nieuws" },
+  { name: "Al Jazeera", url: "https://www.aljazeera.com", feed_url: "https://www.aljazeera.com/xml/rss/all.xml", category: "nieuws" },
+  { name: "ProPublica", url: "https://www.propublica.org", feed_url: "https://feeds.propublica.org/propublica/main", category: "nieuws" },
+  { name: "Foreign Policy", url: "https://foreignpolicy.com", feed_url: "https://foreignpolicy.com/feed/", category: "nieuws" },
+  { name: "The Atlantic", url: "https://www.theatlantic.com", feed_url: "https://feeds.feedburner.com/TheAtlantic", category: "nieuws" },
+  { name: "Vox", url: "https://www.vox.com", feed_url: "https://www.vox.com/rss/index.xml", category: "nieuws" },
+
+  // Nieuws — NL
+  { name: "NOS Nieuws", url: "https://nos.nl", feed_url: "https://feeds.nos.nl/nosnieuwsalgemeen", category: "nieuws" },
+  { name: "NRC", url: "https://www.nrc.nl", feed_url: "https://www.nrc.nl/rss/", category: "nieuws" },
+  { name: "Follow the Money", url: "https://www.ftm.nl", feed_url: "https://www.ftm.nl/rss", category: "nieuws" },
+
+  // Series / cultuur
+  { name: "Polygon", url: "https://www.polygon.com", feed_url: "https://www.polygon.com/rss/index.xml", category: "series" },
+  { name: "Vulture", url: "https://www.vulture.com", feed_url: "https://www.vulture.com/rss/", category: "series" },
+  { name: "AV Club", url: "https://www.avclub.com", feed_url: "https://www.avclub.com/rss", category: "series" },
+  { name: "Den of Geek", url: "https://www.denofgeek.com", feed_url: "https://www.denofgeek.com/feed/", category: "series" },
+  { name: "Variety", url: "https://variety.com", feed_url: "https://variety.com/feed/", category: "series" },
+  { name: "Deadline", url: "https://deadline.com", feed_url: "https://deadline.com/feed/", category: "series" },
+
+  // Games
+  { name: "IGN", url: "https://www.ign.com", feed_url: "https://feeds.feedburner.com/ign/all", category: "games" },
+  { name: "Rock Paper Shotgun", url: "https://www.rockpapershotgun.com", feed_url: "https://www.rockpapershotgun.com/feed/", category: "games" },
+  { name: "Eurogamer", url: "https://www.eurogamer.net", feed_url: "https://www.eurogamer.net/?format=rss", category: "games" },
+
+  // Wetenschap
+  { name: "New Scientist", url: "https://www.newscientist.com", feed_url: "https://www.newscientist.com/feed/home/", category: "wetenschap" },
+  { name: "Scientific American", url: "https://www.scientificamerican.com", feed_url: "https://rss.sciam.com/ScientificAmerican-Global", category: "wetenschap" },
+  { name: "Popular Science", url: "https://www.popsci.com", feed_url: "https://www.popsci.com/feed/", category: "wetenschap" },
+
+  // Overig
+  { name: "Rolling Stone", url: "https://www.rollingstone.com", feed_url: "https://www.rollingstone.com/feed/", category: "cultuur" },
+  { name: "Lifehacker", url: "https://lifehacker.com", feed_url: "https://lifehacker.com/feed/rss", category: "overig" },
+];
+
+const client = createClient({
+  url: process.env.TURSO_DATABASE_URL!,
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+
+const db = drizzle(client);
+
+let inserted = 0;
+for (const source of SOURCES) {
+  try {
+    await db.insert(sources).values(source).onConflictDoNothing();
+    inserted++;
+  } catch (err) {
+    console.error(`Skip ${source.name}:`, err);
+  }
+}
+console.log(`Seed klaar: ${inserted}/${SOURCES.length} bronnen ingevoerd`);
+client.close();
