@@ -157,6 +157,9 @@ Selecteer precies 10 artikelen uit de kandidatenlijst die samen de beste
 dagelijkse feed vormen. Gebruik het profiel en de smaak-entries om te bepalen
 wat relevant is.
 
+> Implementatienotitie: de huidige code vraagt de curator bewust om 15 suggesties en
+> reduceert daarna naar 10 items na constraint-enforcement (15 → 10) voor betere variatie.
+
 Regels:
 - Nooit meer dan 3 items uit dezelfde categorie
 - Altijd minstens 1 Nederlandstalig item
