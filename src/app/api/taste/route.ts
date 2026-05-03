@@ -1,12 +1,37 @@
 import { db } from "@/db";
 import { taste_entries } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+const ALLOWED_TYPES = ["series", "film", "boek", "game", "muziek"] as const;
+type CanonicalType = (typeof ALLOWED_TYPES)[number];
+
+function normalizeType(raw: unknown): CanonicalType {
+  const value = String(raw ?? "").toLowerCase().trim();
+  if (value === "serie") return "series";
+  if (value === "spel") return "game";
+  if (value === "podcast") return "muziek";
+  if ((ALLOWED_TYPES as readonly string[]).includes(value)) return value as CanonicalType;
+  return "film";
+}
 
 export async function GET() {
   try {
     const all = await db.select().from(taste_entries).orderBy(desc(taste_entries.added_at));
-    return NextResponse.json(all);
+    const migrated = await Promise.all(
+      all.map(async (entry) => {
+        const normalized = normalizeType(entry.type);
+        if (normalized !== entry.type) {
+          await db
+            .update(taste_entries)
+            .set({ type: normalized })
+            .where(eq(taste_entries.id, entry.id));
+          return { ...entry, type: normalized };
+        }
+        return entry;
+      })
+    );
+    return NextResponse.json(migrated);
   } catch (error) {
     console.error("GET /api/taste:", error);
     return NextResponse.json({ error: "Ophalen mislukt" }, { status: 500 });
@@ -16,17 +41,22 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, type, liked, notes } = body;
+    const { title, type, liked, notes, rating } = body;
 
     if (!title || !type) {
       return NextResponse.json({ error: "title en type zijn verplicht" }, { status: 400 });
+    }
+    const parsedRating = rating === null || rating === undefined ? null : Number(rating);
+    if (parsedRating !== null && (!Number.isInteger(parsedRating) || parsedRating < 1 || parsedRating > 10)) {
+      return NextResponse.json({ error: "rating moet een geheel getal tussen 1 en 10 zijn" }, { status: 400 });
     }
 
     const [created] = await db
       .insert(taste_entries)
       .values({
         title: String(title).trim(),
-        type: String(type),
+        type: normalizeType(type),
+        rating: parsedRating,
         liked: liked === false || liked === 0 ? 0 : 1,
         notes: notes ? String(notes).trim() : null,
       })
