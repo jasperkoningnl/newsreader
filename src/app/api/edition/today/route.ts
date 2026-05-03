@@ -1,8 +1,9 @@
 import { db } from "@/db";
 import { articles, editions, sources } from "@/db/schema";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { generateEdition } from "@/lib/generate-edition";
+import { fetchAllFeeds } from "@/lib/fetch-feeds";
 
 export type EditionItem = {
   id: number;
@@ -45,6 +46,21 @@ export async function getOrGenerateToday(): Promise<TodayEdition> {
 
   if (latest && new Date(latest.created_at ?? 0) >= todayStart) {
     return buildEdition(latest);
+  }
+
+  // Zorg dat er genoeg ongelezen artikelen zijn
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 19);
+
+  const [{ value: candidateCount }] = await db
+    .select({ value: count() })
+    .from(articles)
+    .where(and(eq(articles.read, 0), gte(articles.fetched_at, threeDaysAgo)));
+
+  if (candidateCount < 5) {
+    await fetchAllFeeds();
   }
 
   const { edition_id } = await generateEdition();
