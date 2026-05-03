@@ -19,6 +19,7 @@ type Candidate = {
 
 type CuratorItem = { id: number; motivatie: string };
 
+const SOURCE_LIMIT = 2;
 const NL_SOURCES = new Set(["NOS Nieuws", "NRC", "Follow the Money"]);
 const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "ontwikkelt", "update"];
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
@@ -60,9 +61,11 @@ Hier is Jasper's profiel en smaakvoorkeur:
 ${profile}${tasteContext}
 
 Selecteer precies 15 artikelen uit de onderstaande lijst die samen de beste dagelijkse feed vormen.
+Context: de app publiceert uiteindelijk 10 items. Deze overselectie (15 -> 10)
+wordt bewust gebruikt om na constraint-enforcement een gevarieerdere top-10 over te houden.
 
 HARDE REGELS (verplicht, geen uitzonderingen):
-- Maximaal 2 items van dezelfde bron (bijv. max 2 van "The Verge", max 2 van "TechCrunch")
+- Maximaal ${SOURCE_LIMIT} items van dezelfde bron (bijv. max ${SOURCE_LIMIT} van "The Verge")
 - Maximaal 3 items uit dezelfde categorie
 - Altijd minstens 1 Nederlandstalig item (bron: NOS Nieuws, NRC, of Follow the Money)
 - Minstens 1 longread (schat in op basis van titel/beschrijving)
@@ -130,7 +133,7 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): C
 
   const canAdd = (c: Candidate, current: Candidate[]) => {
     const sourceCount = sourceCounts[c.source] ?? 0;
-    if (sourceCount >= 2) return false;
+    if (sourceCount >= SOURCE_LIMIT) return false;
     const cat = (c.category ?? "overig").toLowerCase();
     const catCount = categoryCounts[cat] ?? 0;
     if (catCount >= 3) return false;
@@ -187,7 +190,10 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): C
   return result;
 }
 
-const MAX_PER_SOURCE = 2;
+const MAX_PER_SOURCE = SOURCE_LIMIT;
+// Productkeuze: de dagelijkse editie toont 10 items.
+// We vragen de curator om 15 suggesties en knippen daarna terug naar 10,
+// zodat we na hard constraint-enforcement (mix/diversiteit) nog genoeg variatie overhouden.
 const EDITION_SIZE = 10;
 
 export async function generateEdition(): Promise<{ edition_id: number; count: number }> {
