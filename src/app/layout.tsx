@@ -6,24 +6,20 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "Newsreader",
-  description: "Jasper's persoonlijke nieuwsreader",
-  manifest: "/manifest.webmanifest",
-  icons: {
-    icon: [{ url: "/app-icon.svg", type: "image/svg+xml" }, { url: "/favicon.ico", sizes: "any" }],
-  },
+  title: "The Feed",
+  description: "Jasper's personal newsreader",
 };
 
 const navItems = [
   { href: "/", label: "Feed" },
-  { href: "/bronnen", label: "Bronnen" },
-  { href: "/smaak", label: "Smaak" },
-  { href: "/bewaard", label: "Bewaard" },
+  { href: "/bronnen", label: "Sources" },
+  { href: "/smaak", label: "Taste" },
+  { href: "/bewaard", label: "Saved" },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="nl" className={`${geist.variable} h-full antialiased`}>
+    <html lang="en" className={`${geist.variable} h-full antialiased`}>
       <body className="h-full bg-black text-white">
         <div className="flex h-full">
           <aside className="hidden md:flex w-[120px] shrink-0 border-r border-white/10 bg-black flex-col py-6">
