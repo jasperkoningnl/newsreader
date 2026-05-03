@@ -145,7 +145,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
       href={item.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="relative flex flex-col h-full snap-start overflow-hidden select-none md:h-72 md:rounded-xl md:snap-align-none"
+      className="group relative flex flex-col h-full snap-start overflow-hidden select-none md:h-[48vh] md:min-h-[420px] md:rounded-none"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       {item.image_url && !imgFailed ? (
@@ -165,20 +165,9 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
         />
       )}
 
-      {/* gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/10" />
-
-      {/* scroll hint — top (mobile only) */}
-      {index > 0 && (
-        <div className="relative flex justify-center pt-3 opacity-30 md:hidden">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-        </div>
-      )}
-
+      <div className="absolute inset-0 story-scrim" />
       {/* content */}
-      <div className="relative mt-auto px-5 pb-6 pt-4">
+      <div className="relative mt-auto px-5 pb-5 md:px-8 md:pb-8">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-medium text-white/50 uppercase tracking-wide">
             {item.source}
@@ -192,7 +181,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
             </>
           )}
         </div>
-        <h2 className="text-[1.6rem] font-bold leading-tight text-white">
+        <h2 className="text-[2rem] md:text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em] text-white">
           {item.title}
         </h2>
         {item.description && (
@@ -211,27 +200,20 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
             <button
               type="button"
               onClick={handleSave}
-              className="text-xs rounded-full border border-white/30 px-2 py-1 text-white/80"
+              className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10"
             >
-              {saved ? "★ Bewaard" : "☆ Bewaar"}
+              {saved ? "★" : "☆"}
             </button>
             <button
               type="button"
               onClick={handleLike}
               disabled={liking || liked}
-              className="text-xs rounded-full border border-white/30 px-2 py-1 text-white/80 disabled:opacity-60"
+              className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10 disabled:opacity-60"
             >
-              {liked ? "✓ Geliket" : liking ? "Opslaan…" : "♡ Like"}
+              {liked ? "♥" : liking ? "…" : "♡"}
             </button>
           </div>
         </div>
-      </div>
-
-      {/* scroll hint — bottom (mobile only) */}
-      <div className="relative flex justify-center pb-3 opacity-30 md:hidden">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
       </div>
     </a>
   );
@@ -276,7 +258,7 @@ export default function FeedCards({
   createdAt: string | null;
 }) {
   return (
-    <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-1 md:p-1 md:bg-neutral-950">
+    <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-6 md:p-6 md:bg-[#141313]">
       {items.map((item, i) => (
         <Card key={item.id} item={item} index={i} />
       ))}
