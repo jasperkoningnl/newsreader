@@ -89,39 +89,8 @@ function RefreshButton() {
 
 function Card({ item, index }: { item: EditionItem; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(item.liked);
   const [liking, setLiking] = useState(false);
-  const [saved, setSaved] = useState(() => {
-    const savedItems = readSavedArticles();
-    return savedItems.some((savedItem) => savedItem.id === item.id);
-  });
-
-  function handleSave(e: MouseEvent<HTMLButtonElement>) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const savedItems = readSavedArticles();
-    if (saved) {
-      writeSavedArticles(savedItems.filter((savedItem) => savedItem.id !== item.id));
-      setSaved(false);
-      return;
-    }
-
-    const articleToSave: SavedArticle = {
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      description: item.description,
-      image_url: item.image_url,
-      published_at: item.published_at,
-      category: item.category,
-      source: item.source,
-      saved_at: new Date().toISOString(),
-    };
-
-    writeSavedArticles([articleToSave, ...savedItems.filter((savedItem) => savedItem.id !== item.id)]);
-    setSaved(true);
-  }
 
   async function handleLike(e: MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
@@ -207,23 +176,14 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSave}
-              className="text-xs rounded-full border border-white/30 px-2 py-1 text-white/80"
-            >
-              {saved ? "★ Bewaard" : "☆ Bewaar"}
-            </button>
-            <button
-              type="button"
-              onClick={handleLike}
-              disabled={liking || liked}
-              className="text-xs rounded-full border border-white/30 px-2 py-1 text-white/80 disabled:opacity-60"
-            >
-              {liked ? "✓ Geliket" : liking ? "Opslaan…" : "♡ Like"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleLike}
+            disabled={liking || liked}
+            className="text-xs rounded-full border border-white/30 px-2 py-1 text-white/80 disabled:opacity-60"
+          >
+            {liked ? "✓ Geliket" : liking ? "Opslaan…" : "♡ Like"}
+          </button>
         </div>
       </div>
 
