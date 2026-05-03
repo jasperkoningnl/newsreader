@@ -7,6 +7,8 @@ type RssItem = Parser.Item & {
   mediaContent?: { $?: { url?: string } };
   mediaThumbnail?: { $?: { url?: string } };
   enclosure?: { url?: string; type?: string };
+  thumbnail?: string;
+  "content:encoded"?: string;
 };
 
 const parser = new Parser<Record<string, unknown>, RssItem>({
@@ -38,8 +40,15 @@ function extractImageUrl(item: RssItem): string | null {
     const type = item.enclosure.type ?? "";
     if (!type || type.startsWith("image/")) return item.enclosure.url;
   }
-  const imgMatch = item.content?.match(/<img[^>]+src=["']([^"']+)["']/i);
-  return imgMatch ? imgMatch[1] : null;
+  if (item.thumbnail) return item.thumbnail;
+
+  const htmlCandidates = [item["content:encoded"], item.content, item.contentSnippet].filter((v): v is string => !!v);
+  for (const html of htmlCandidates) {
+    const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgMatch?.[1]) return imgMatch[1];
+  }
+
+  return null;
 }
 
 export type FetchResult = {
