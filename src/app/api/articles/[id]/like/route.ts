@@ -1,0 +1,47 @@
+import { db } from "@/db";
+import { article_likes, articles, sources } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const articleId = parseInt(id, 10);
+    if (!Number.isInteger(articleId) || articleId <= 0) {
+      return NextResponse.json({ error: "Ongeldig artikel-id" }, { status: 400 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const liked = body?.liked === false || body?.liked === 0 ? 0 : 1;
+
+    const [article] = await db
+      .select({ source_id: articles.source_id, category: articles.category })
+      .from(articles)
+      .where(eq(articles.id, articleId))
+      .limit(1);
+
+    if (!article) {
+      return NextResponse.json({ error: "Artikel niet gevonden" }, { status: 404 });
+    }
+
+    const topic = String(article.category ?? "overig").toLowerCase().trim() || "overig";
+    const [created] = await db
+      .insert(article_likes)
+      .values({
+        article_id: articleId,
+        source_id: article.source_id,
+        topic,
+        liked,
+      })
+      .returning();
+
+    const sourceName = article.source_id
+      ? (await db.select({ name: sources.name }).from(sources).where(eq(sources.id, article.source_id)).limit(1))[0]?.name ?? null
+      : null;
+
+    return NextResponse.json({ ...created, source: sourceName, topic }, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/articles/[id]/like:", error);
+    return NextResponse.json({ error: "Like opslaan mislukt" }, { status: 500 });
+  }
+}
