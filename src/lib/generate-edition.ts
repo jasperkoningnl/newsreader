@@ -19,6 +19,11 @@ type Candidate = {
 
 type CuratorItem = { id: number; motivatie: string };
 
+const NL_SOURCES = new Set(["NOS Nieuws", "NRC", "Follow the Money"]);
+const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "ontwikkelt", "update"];
+const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
+const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur"]);
+
 async function fetchTasteContext(): Promise<string> {
   const recent = await db
     .select()
@@ -87,23 +92,102 @@ Antwoord uitsluitend als geldig JSON array (geen markdown, geen tekst erbuiten):
   return JSON.parse(match[0]) as CuratorItem[];
 }
 
+function textBlob(item: Candidate): string {
+  return `${item.title} ${item.description ?? ""}`.toLowerCase();
+}
+
+function isBreaking(item: Candidate): boolean {
+  const t = textBlob(item);
+  return BREAKING_WORDS.some((w) => t.includes(w));
+}
+
+function isLongread(item: Candidate): boolean {
+  const t = textBlob(item);
+  if (LONGREAD_WORDS.some((w) => t.includes(w))) return true;
+  return (item.description?.length ?? 0) > 220;
+}
+
+function isSurprise(item: Candidate): boolean {
+  const cat = (item.category ?? "overig").toLowerCase();
+  return !EXPECTED_CATEGORIES.has(cat);
+}
+
+function meetsGlobalRules(items: Candidate[]): boolean {
+  const hasNl = items.some((i) => NL_SOURCES.has(i.source));
+  const hasLongread = items.some(isLongread);
+  const breakingCount = items.filter(isBreaking).length;
+  const hasSurprise = items.some(isSurprise);
+  return hasNl && hasLongread && breakingCount <= 2 && hasSurprise;
+}
+
 function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): CuratorItem[] {
   const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
+  const curatedById = Object.fromEntries(selected.map((s) => [s.id, s]));
+
   const sourceCounts: Record<string, number> = {};
+  const categoryCounts: Record<string, number> = {};
   const result: CuratorItem[] = [];
+
+  const canAdd = (c: Candidate, current: Candidate[]) => {
+    const sourceCount = sourceCounts[c.source] ?? 0;
+    if (sourceCount >= 2) return false;
+    const cat = (c.category ?? "overig").toLowerCase();
+    const catCount = categoryCounts[cat] ?? 0;
+    if (catCount >= 3) return false;
+    const breakingCount = current.filter(isBreaking).length;
+    if (isBreaking(c) && breakingCount >= 2) return false;
+    return true;
+  };
+
+  const add = (c: Candidate) => {
+    const cat = (c.category ?? "overig").toLowerCase();
+    sourceCounts[c.source] = (sourceCounts[c.source] ?? 0) + 1;
+    categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+    result.push(curatedById[c.id] ?? { id: c.id, motivatie: "Toegevoegd om aan mixregels te voldoen." });
+  };
 
   for (const item of selected) {
     const c = byId[item.id];
     if (!c) continue;
-    if ((sourceCounts[c.source] ?? 0) >= 2) continue;
-    sourceCounts[c.source] = (sourceCounts[c.source] ?? 0) + 1;
-    result.push(item);
+    const currentCandidates = result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
+    if (canAdd(c, currentCandidates)) add(c);
+  }
+
+  const available = candidates.filter((c) => !result.some((r) => r.id === c.id));
+  for (const c of available) {
+    if (result.length >= EDITION_SIZE) break;
+    const currentCandidates = result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
+    if (canAdd(c, currentCandidates)) add(c);
+  }
+
+  // Repair pass: ensure global rules by targeted additions/replacements.
+  const asCandidates = () => result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
+  let current = asCandidates();
+
+  if (!current.some((i) => NL_SOURCES.has(i.source))) {
+    const nl = available.find((c) => NL_SOURCES.has(c.source));
+    if (nl && result.length < EDITION_SIZE) add(nl);
+  }
+  current = asCandidates();
+  if (!current.some(isLongread)) {
+    const longread = available.find(isLongread);
+    if (longread && result.length < EDITION_SIZE) add(longread);
+  }
+  current = asCandidates();
+  if (!current.some(isSurprise)) {
+    const surprise = available.find(isSurprise);
+    if (surprise && result.length < EDITION_SIZE) add(surprise);
+  }
+
+  current = asCandidates();
+  if (!meetsGlobalRules(current)) {
+    console.warn("Curator constraints not fully satisfied after repair pass");
   }
 
   return result;
 }
 
-const MAX_PER_SOURCE = 3;
+const MAX_PER_SOURCE = 2;
 const EDITION_SIZE = 10;
 
 export async function generateEdition(): Promise<{ edition_id: number; count: number }> {
