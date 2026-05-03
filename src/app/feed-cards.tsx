@@ -60,7 +60,7 @@ function RefreshButton() {
       setStatus(e instanceof Error ? e.message : "Onbekende fout");
       setState("error");
     }
-  }
+  };
 
   return (
     <div className="mt-6 flex flex-col items-center gap-2">
@@ -91,8 +91,39 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
   const [liked, setLiked] = useState(item.liked);
   const [liking, setLiking] = useState(false);
+  const [saved, setSaved] = useState(() => {
+    const savedItems = readSavedArticles();
+    return savedItems.some((savedItem) => savedItem.id === item.id);
+  });
 
-  async function handleLike(e: MouseEvent<HTMLButtonElement>) {
+  const handleSave = (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const savedItems = readSavedArticles();
+    if (saved) {
+      writeSavedArticles(savedItems.filter((savedItem) => savedItem.id !== item.id));
+      setSaved(false);
+      return;
+    }
+
+    const articleToSave: SavedArticle = {
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      description: item.description,
+      image_url: item.image_url,
+      published_at: item.published_at,
+      category: item.category,
+      source: item.source,
+      saved_at: new Date().toISOString(),
+    };
+
+    writeSavedArticles([articleToSave, ...savedItems.filter((savedItem) => savedItem.id !== item.id)]);
+    setSaved(true);
+  };
+
+  const handleLike = async (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (liking || liked) return;
@@ -114,7 +145,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
       href={item.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="relative flex flex-col h-full snap-start overflow-hidden select-none md:h-72 md:rounded-xl md:snap-align-none"
+      className="group relative flex flex-col h-full snap-start overflow-hidden select-none md:h-[48vh] md:min-h-[420px] md:rounded-none"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       {item.image_url && !imgFailed ? (
@@ -134,20 +165,9 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
         />
       )}
 
-      {/* gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/10" />
-
-      {/* scroll hint — top (mobile only) */}
-      {index > 0 && (
-        <div className="relative flex justify-center pt-3 opacity-30 md:hidden">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-        </div>
-      )}
-
+      <div className="absolute inset-0 story-scrim" />
       {/* content */}
-      <div className="relative mt-auto px-5 pb-6 pt-4">
+      <div className="relative mt-auto px-5 pb-5 md:px-8 md:pb-8">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-medium text-white/50 uppercase tracking-wide">
             {item.source}
@@ -161,7 +181,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
             </>
           )}
         </div>
-        <h2 className="text-[1.6rem] font-bold leading-tight text-white">
+        <h2 className="text-[2rem] md:text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em] text-white">
           {item.title}
         </h2>
         {item.description && (
@@ -176,6 +196,25 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label={saved ? "Verwijder uit bewaard" : "Bewaar artikel"}
+              onClick={handleSave}
+              className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10"
+            >
+              {saved ? "★" : "☆"}
+            </button>
+            <button
+              type="button"
+              aria-label={liked ? "Geliket" : "Like artikel"}
+              onClick={handleLike}
+              disabled={liking || liked}
+              className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10 disabled:opacity-60"
+            >
+              {liked ? "♥" : liking ? "…" : "♡"}
+            </button>
+          </div>
           <button
             type="button"
             onClick={handleLike}
@@ -185,13 +224,6 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
             {liked ? "✓ Geliket" : liking ? "Opslaan…" : "♡ Like"}
           </button>
         </div>
-      </div>
-
-      {/* scroll hint — bottom (mobile only) */}
-      <div className="relative flex justify-center pb-3 opacity-30 md:hidden">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
       </div>
     </a>
   );
@@ -236,7 +268,7 @@ export default function FeedCards({
   createdAt: string | null;
 }) {
   return (
-    <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-1 md:p-1 md:bg-neutral-950">
+    <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-6 md:p-6 md:bg-[#141313]">
       {items.map((item, i) => (
         <Card key={item.id} item={item} index={i} />
       ))}
