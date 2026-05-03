@@ -1,12 +1,9 @@
 import { generateEdition } from "@/lib/generate-edition";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
-  const cronSecret = req.headers.get("x-cron-secret");
-  if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const maxDuration = 60;
 
+export async function POST() {
   try {
     const result = await generateEdition();
     return NextResponse.json(result);

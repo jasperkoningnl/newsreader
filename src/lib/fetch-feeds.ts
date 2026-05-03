@@ -80,31 +80,46 @@ async function fetchOneFeed(source: typeof sources.$inferSelect): Promise<FetchR
       if (result.rowsAffected > 0) fetched++; else skipped++;
     }
 
-    console.log(`[fetch-feeds] OK  ${source.name}: ${fetched} nieuw, ${skipped} al bekend`);
     return { source: source.name, fetched, skipped, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[fetch-feeds] ERR ${source.name} (${source.feed_url}): ${message}`);
     return { source: source.name, fetched: 0, skipped: 0, error: message };
   }
 }
 
-async function runWithConcurrency<T>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<FetchResult>
-): Promise<FetchResult[]> {
-  const results: FetchResult[] = [];
-  for (let i = 0; i < items.length; i += concurrency) {
-    const batch = items.slice(i, i + concurrency);
-    const batchResults = await Promise.all(batch.map(fn));
-    results.push(...batchResults);
-  }
-  return results;
+// Haalt een batch bronnen volledig parallel op (Promise.allSettled).
+// offset + limit zijn voor client-side batching: de client roept dit
+// meerdere keren aan zodat elke Vercel-call binnen 10s blijft.
+export async function fetchFeedsBatch(offset = 0, limit = 20): Promise<{
+  results: FetchResult[];
+  total: number;
+  offset: number;
+  limit: number;
+}> {
+  const activeSources = await db.select().from(sources).where(eq(sources.active, 1));
+  const batch = activeSources.slice(offset, offset + limit);
+
+  console.log(`[fetch-feeds] batch offset=${offset} limit=${limit}: ${batch.length} bronnen parallel`);
+
+  const settled = await Promise.allSettled(batch.map(fetchOneFeed));
+  const results = settled.map((r, i) =>
+    r.status === "fulfilled"
+      ? r.value
+      : { source: batch[i].name, fetched: 0, skipped: 0, error: String((r as PromiseRejectedResult).reason) }
+  );
+
+  const ok = results.filter((r) => r.error === null);
+  const failed = results.filter((r) => r.error !== null);
+  console.log(
+    `[fetch-feeds] batch klaar: ${ok.length} ok, ${failed.length} fout` +
+    (failed.length ? ` — ${failed.map((f) => `${f.source}: ${f.error}`).join("; ")}` : "")
+  );
+
+  return { results, total: activeSources.length, offset, limit };
 }
 
+// Wrapper voor de cron (haalt alles op in één aanroep).
 export async function fetchAllFeeds(): Promise<FetchResult[]> {
-  const activeSources = await db.select().from(sources).where(eq(sources.active, 1));
-  console.log(`[fetch-feeds] ${activeSources.length} actieve bronnen, ophalen in batches van 10`);
-  return runWithConcurrency(activeSources, 10, fetchOneFeed);
+  const { results } = await fetchFeedsBatch(0, 9999);
+  return results;
 }
