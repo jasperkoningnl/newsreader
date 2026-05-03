@@ -51,7 +51,12 @@ export async function getOrGenerateToday(force = false): Promise<TodayEdition> {
     }
   }
 
-  // Haal altijd verse feeds op bij force, anders alleen als er te weinig kandidaten zijn
+  // Bij force: reset read-status zodat testen de pool niet uitput
+  if (force) {
+    await db.update(articles).set({ read: 0 });
+  }
+
+  // Haal verse feeds op bij force of als er te weinig kandidaten zijn
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
     .toISOString()
     .replace("T", " ")

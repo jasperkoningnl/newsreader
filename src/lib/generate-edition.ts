@@ -74,18 +74,13 @@ Antwoord uitsluitend als geldig JSON array (geen markdown, geen tekst erbuiten):
 function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): CuratorItem[] {
   const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const sourceCounts: Record<string, number> = {};
-  const categoryCounts: Record<string, number> = {};
   const result: CuratorItem[] = [];
 
   for (const item of selected) {
     const c = byId[item.id];
     if (!c) continue;
-    const src = c.source;
-    const cat = c.category ?? "overig";
-    if ((sourceCounts[src] ?? 0) >= 2) continue;
-    if ((categoryCounts[cat] ?? 0) >= 3) continue;
-    sourceCounts[src] = (sourceCounts[src] ?? 0) + 1;
-    categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+    if ((sourceCounts[c.source] ?? 0) >= 2) continue;
+    sourceCounts[c.source] = (sourceCounts[c.source] ?? 0) + 1;
     result.push(item);
   }
 
