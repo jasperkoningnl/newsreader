@@ -8,6 +8,10 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 export const metadata: Metadata = {
   title: "Newsreader",
   description: "Jasper's persoonlijke nieuwsreader",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/app-icon.svg", type: "image/svg+xml" }, { url: "/favicon.ico", sizes: "any" }],
+  },
 };
 
 const navItems = [
