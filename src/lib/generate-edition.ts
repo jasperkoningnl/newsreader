@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
 import { articles, editions, sources, taste_entries } from "@/db/schema";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, ne } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -238,7 +238,12 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     })
     .from(articles)
     .innerJoin(sources, eq(articles.source_id, sources.id))
-    .where(and(eq(articles.read, 0), gte(articles.fetched_at, threeDaysAgo)))
+    .where(and(
+      eq(articles.read, 0),
+      gte(articles.fetched_at, threeDaysAgo),
+      isNotNull(articles.image_url),
+      ne(articles.image_url, ""),
+    ))
     .orderBy(desc(articles.fetched_at));
 
   const countPerSource: Record<string, number> = {};
@@ -263,7 +268,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   }
 
   if (candidates.length < 5) {
-    throw new Error("Te weinig kandidaat-artikelen (< 5). Haal eerst feeds op.");
+    throw new Error("Te weinig kandidaat-artikelen met afbeelding (< 5). Haal eerst feeds op.");
   }
 
   const uniqueSources = new Set(candidates.map((c) => c.source));
