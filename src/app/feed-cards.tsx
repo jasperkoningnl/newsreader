@@ -89,39 +89,8 @@ function RefreshButton() {
 
 function Card({ item, index }: { item: EditionItem; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(item.liked);
   const [liking, setLiking] = useState(false);
-  const [saved, setSaved] = useState(() => {
-    const savedItems = readSavedArticles();
-    return savedItems.some((savedItem) => savedItem.id === item.id);
-  });
-
-  function handleSave(e: MouseEvent<HTMLButtonElement>) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const savedItems = readSavedArticles();
-    if (saved) {
-      writeSavedArticles(savedItems.filter((savedItem) => savedItem.id !== item.id));
-      setSaved(false);
-      return;
-    }
-
-    const articleToSave: SavedArticle = {
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      description: item.description,
-      image_url: item.image_url,
-      published_at: item.published_at,
-      category: item.category,
-      source: item.source,
-      saved_at: new Date().toISOString(),
-    };
-
-    writeSavedArticles([articleToSave, ...savedItems.filter((savedItem) => savedItem.id !== item.id)]);
-    setSaved(true);
-  }
 
   async function handleLike(e: MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
