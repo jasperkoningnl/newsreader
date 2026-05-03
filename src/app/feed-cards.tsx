@@ -22,10 +22,10 @@ function RefreshButton() {
 
     try {
       // Fetch first batch to discover total
-      setStatus("Feeds ophalen…");
+      setStatus("Fetching feeds…");
       const firstRes = await fetch(`/api/fetch-feeds?offset=0&limit=${BATCH_SIZE}`, { method: "POST" });
       const firstData = await firstRes.json();
-      if (!firstRes.ok) throw new Error(firstData.error ?? "Feeds ophalen mislukt");
+      if (!firstRes.ok) throw new Error(firstData.error ?? "Failed to fetch feeds");
 
       const total: number = firstData.total;
       totalOk += firstData.fetched_sources;
@@ -36,28 +36,28 @@ function RefreshButton() {
 
       for (let batch = 1; batch < batches; batch++) {
         const offset = batch * BATCH_SIZE;
-        setStatus(`Feeds ophalen ${Math.min(offset + BATCH_SIZE, total)}/${total}…`);
+        setStatus(`Fetching feeds ${Math.min(offset + BATCH_SIZE, total)}/${total}…`);
         const res = await fetch(`/api/fetch-feeds?offset=${offset}&limit=${BATCH_SIZE}`, { method: "POST" });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Feeds ophalen mislukt");
+        if (!res.ok) throw new Error(data.error ?? "Failed to fetch feeds");
         totalOk += data.fetched_sources;
         totalFailed += data.failed_sources;
         failures.push(...(data.failures ?? []));
       }
 
-      setStatus("Editie genereren…");
+      setStatus("Generating edition…");
       const genRes = await fetch("/api/edition/generate", { method: "POST" });
       const genData = await genRes.json();
-      if (!genRes.ok) throw new Error(genData.error ?? "Genereren mislukt");
+      if (!genRes.ok) throw new Error(genData.error ?? "Failed to generate edition");
 
       const failureNote = failures.length
-        ? ` — ${failures.length} mislukt: ${failures.map((f) => f.source).join(", ")}`
+        ? ` — ${failures.length} failed: ${failures.map((f) => f.source).join(", ")}`
         : "";
-      setStatus(`${genData.count} items · ${totalOk} feeds ok · ${totalFailed} mislukt${failureNote}`);
+      setStatus(`${genData.count} items · ${totalOk} feeds ok · ${totalFailed} failed${failureNote}`);
       setState("idle");
       router.refresh();
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Onbekende fout");
+      setStatus(e instanceof Error ? e.message : "Unknown error");
       setState("error");
     }
   };
@@ -76,7 +76,7 @@ function RefreshButton() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        {state === "busy" ? "Bezig…" : "Ververs feed"}
+        {state === "busy" ? "Working…" : "Refresh feed"}
       </button>
       {status && (
         <p className={`text-xs ${state === "error" ? "text-red-400" : "text-white/40"}`}>
@@ -142,7 +142,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
   };
 
   const publishedAt = item.published_at
-    ? new Date(item.published_at).toLocaleDateString("nl-NL", {
+    ? new Date(item.published_at).toLocaleDateString("en-US", {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -206,7 +206,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
         )}
         <div className="mt-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-1 text-xs text-white/40">
-            <span>Lees verder</span>
+            <span>Read more</span>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
@@ -214,7 +214,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label={saved ? "Verwijder uit bewaard" : "Bewaar artikel"}
+              aria-label={saved ? "Remove from saved" : "Save article"}
               onClick={handleSave}
               className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10"
             >
@@ -222,7 +222,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
             </button>
             <button
               type="button"
-              aria-label={liked ? "Unlike artikel" : "Like artikel"}
+              aria-label={liked ? "Unlike article" : "Like article"}
               onClick={handleLike}
               disabled={liking}
               className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10 disabled:opacity-60"
@@ -239,7 +239,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
 function EndCard({ createdAt }: { createdAt: string | null }) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toLocaleDateString("nl-NL", {
+  const tomorrowStr = tomorrow.toLocaleDateString("en-US", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -248,14 +248,14 @@ function EndCard({ createdAt }: { createdAt: string | null }) {
   return (
     <div className="relative flex flex-col h-full snap-start items-center justify-center px-8 text-center bg-black md:col-span-2 md:h-56 md:rounded-xl md:snap-align-none">
       <div className="text-5xl mb-6">🌿</div>
-      <h2 className="text-2xl font-bold mb-2">Dat was het voor vandaag</h2>
+      <h2 className="text-2xl font-bold mb-2">That’s it for today</h2>
       <p className="text-white/40 text-sm">
-        Volgende editie {tomorrowStr}
+        Next edition {tomorrowStr}
       </p>
       {createdAt && (
         <p className="mt-6 text-xs text-white/20">
-          Editie van{" "}
-          {new Date(createdAt).toLocaleDateString("nl-NL", {
+          Edition from{" "}
+          {new Date(createdAt).toLocaleDateString("en-US", {
             weekday: "long",
             day: "numeric",
             month: "long",

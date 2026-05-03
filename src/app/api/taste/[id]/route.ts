@@ -10,6 +10,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("DELETE /api/taste/[id]:", error);
-    return NextResponse.json({ error: "Verwijderen mislukt" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
   }
 }

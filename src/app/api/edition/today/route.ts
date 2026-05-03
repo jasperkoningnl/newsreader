@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(edition);
   } catch (error) {
     console.error("GET /api/edition/today:", error);
-    const message = error instanceof Error ? error.message : "Ophalen mislukt";
+    const message = error instanceof Error ? error.message : "Failed to fetch";
     return NextResponse.json({ error: message }, { status: 503 });
   }
 }

@@ -11,7 +11,7 @@ function sectionLabel(savedAt?: string) {
   return "History";
 }
 
-export default function BewaardPage() {
+export default function SavedPage() {
   const [items, setItems] = useState<SavedArticle[]>(() => readSavedArticles());
 
   const groups = useMemo(() => {
@@ -31,10 +31,10 @@ export default function BewaardPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-10 md:py-14">
-      <h1 className="text-5xl font-bold tracking-[-0.03em]">Bewaard</h1>
+      <h1 className="text-5xl font-bold tracking-[-0.03em]">Saved</h1>
 
       {items.length === 0 ? (
-        <p className="mt-4 text-white/60">Je hebt nog geen artikelen bewaard.</p>
+        <p className="mt-4 text-white/60">You have not saved any articles yet.</p>
       ) : (
         <div className="mt-8 space-y-10">
           {(["Recently Saved", "History"] as const).map((section) => {
@@ -57,7 +57,7 @@ export default function BewaardPage() {
                         {item.description && <p className="mt-2 text-white/65 line-clamp-2">{item.description}</p>}
                       </a>
                       <button type="button" onClick={() => removeItem(item.id)} className="touch-active h-10 rounded-full border border-white/20 px-4 text-sm text-white/75 hover:bg-white/10">
-                        Verwijder
+                        Remove
                       </button>
                     </article>
                   ))}

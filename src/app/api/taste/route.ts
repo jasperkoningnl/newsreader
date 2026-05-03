@@ -34,7 +34,7 @@ export async function GET() {
     return NextResponse.json(migrated);
   } catch (error) {
     console.error("GET /api/taste:", error);
-    return NextResponse.json({ error: "Ophalen mislukt" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }
 }
 
@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
     const { title, type, liked, notes, rating } = body;
 
     if (!title || !type) {
-      return NextResponse.json({ error: "title en type zijn verplicht" }, { status: 400 });
+      return NextResponse.json({ error: "title and type are required" }, { status: 400 });
     }
     const parsedRating = rating === null || rating === undefined ? null : Number(rating);
     if (parsedRating !== null && (!Number.isInteger(parsedRating) || parsedRating < 1 || parsedRating > 10)) {
-      return NextResponse.json({ error: "rating moet een geheel getal tussen 1 en 10 zijn" }, { status: 400 });
+      return NextResponse.json({ error: "rating must be an integer between 1 and 10" }, { status: 400 });
     }
 
     const [created] = await db
@@ -65,6 +65,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error("POST /api/taste:", error);
-    return NextResponse.json({ error: "Opslaan mislukt" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save" }, { status: 500 });
   }
 }
