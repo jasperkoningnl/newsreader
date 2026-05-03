@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { articles, editions, sources } from "@/db/schema";
-import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
+import { article_likes, articles, editions, sources } from "@/db/schema";
+import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 300;
@@ -17,6 +17,7 @@ export type EditionItem = {
   category: string | null;
   source: string;
   motivatie: string;
+  liked: boolean;
 };
 
 export type TodayEdition = {
@@ -95,16 +96,28 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
       published_at: articles.published_at,
       category: articles.category,
       source: sources.name,
+      liked: sql<number>`max(coalesce(${article_likes.liked}, 0))`,
     })
     .from(articles)
     .innerJoin(sources, eq(articles.source_id, sources.id))
-    .where(inArray(articles.id, ids));
+    .leftJoin(article_likes, eq(article_likes.article_id, articles.id))
+    .where(inArray(articles.id, ids))
+    .groupBy(
+      articles.id,
+      articles.title,
+      articles.url,
+      articles.description,
+      articles.image_url,
+      articles.published_at,
+      articles.category,
+      sources.name,
+    );
 
   const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
   const items: EditionItem[] = parsed
     .map((p) => {
       const a = byId[p.id];
-      return a ? { ...a, motivatie: p.motivatie } : null;
+      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked) } : null;
     })
     .filter((x): x is EditionItem => x !== null);
 

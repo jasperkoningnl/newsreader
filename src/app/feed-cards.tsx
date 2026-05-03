@@ -89,7 +89,7 @@ function RefreshButton() {
 
 function Card({ item, index }: { item: EditionItem; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(item.liked);
   const [liking, setLiking] = useState(false);
   const [saved, setSaved] = useState(() => {
     const savedItems = readSavedArticles();
@@ -215,6 +215,14 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
               {liked ? "♥" : liking ? "…" : "♡"}
             </button>
           </div>
+          <button
+            type="button"
+            onClick={handleLike}
+            disabled={liking || liked}
+            className="text-xs rounded-full border border-white/30 px-2 py-1 text-white/80 disabled:opacity-60"
+          >
+            {liked ? "✓ Geliket" : liking ? "Opslaan…" : "♡ Like"}
+          </button>
         </div>
       </div>
     </a>
