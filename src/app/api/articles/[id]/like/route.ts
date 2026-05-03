@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { article_likes, articles, sources } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,15 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const topic = String(article.category ?? "overig").toLowerCase().trim() || "overig";
-    const [existing] = await db
-      .select({ id: article_likes.id })
-      .from(article_likes)
-      .where(and(eq(article_likes.article_id, articleId), eq(article_likes.liked, liked)))
-      .limit(1);
-
-    if (existing) {
-      return NextResponse.json({ id: existing.id, article_id: articleId, source_id: article.source_id, topic, liked }, { status: 200 });
-    }
+    await db.delete(article_likes).where(eq(article_likes.article_id, articleId));
 
     const [created] = await db
       .insert(article_likes)
