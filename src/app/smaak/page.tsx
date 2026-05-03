@@ -3,15 +3,14 @@
 import type { TasteEntry } from "@/db/schema";
 import { useEffect, useState } from "react";
 
-const TYPES = ["film", "serie", "boek", "spel", "podcast", "overig"];
+const TYPES = ["series", "film", "boek", "game", "muziek"];
 
 const TYPE_EMOJI: Record<string, string> = {
   film: "🎬",
-  serie: "📺",
+  series: "📺",
   boek: "📚",
-  spel: "🎮",
-  podcast: "🎙️",
-  overig: "✨",
+  game: "🎮",
+  muziek: "🎵",
 };
 
 function timeAgo(dateStr: string): string {
@@ -24,13 +23,23 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("nl-NL", { day: "numeric", month: "long" });
 }
 
+function formatAbsoluteDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("nl-NL", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export default function SmaakPage() {
   const [entries, setEntries] = useState<TasteEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
-  const [type, setType] = useState("film");
+  const [type, setType] = useState("series");
   const [liked, setLiked] = useState(true);
+  const [rating, setRating] = useState(7);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +60,7 @@ export default function SmaakPage() {
       const res = await fetch("/api/taste", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), type, liked, notes: notes.trim() || null }),
+        body: JSON.stringify({ title: title.trim(), type, liked, rating, notes: notes.trim() || null }),
       });
       if (!res.ok) throw new Error("Opslaan mislukt");
       const created = await res.json();
@@ -59,7 +68,8 @@ export default function SmaakPage() {
       setTitle("");
       setNotes("");
       setLiked(true);
-      setType("film");
+      setType("series");
+      setRating(7);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Onbekende fout");
     } finally {
@@ -81,7 +91,7 @@ export default function SmaakPage() {
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder="Titel (film, serie, boek, spel…)"
+            placeholder="Titel (film, series, boek, game, muziek…)"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
@@ -98,6 +108,19 @@ export default function SmaakPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <label className="col-span-1 text-xs text-white/50 self-center">Rating (1-10)</label>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            step={1}
+            value={rating}
+            onChange={(e) => setRating(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
+            className="col-span-2 bg-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-white/40"
+          />
         </div>
 
         <input
@@ -157,6 +180,7 @@ export default function SmaakPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="font-medium text-sm">{entry.title}</span>
+                  {entry.rating && <span className="text-xs text-amber-300">{entry.rating}/10</span>}
                   <span
                     className={`text-xs font-medium ${
                       entry.liked ? "text-green-400" : "text-red-400"
@@ -169,7 +193,7 @@ export default function SmaakPage() {
                   <p className="text-xs text-white/40 mt-0.5">{entry.notes}</p>
                 )}
                 <p className="text-xs text-white/25 mt-0.5">
-                  {entry.type} · {timeAgo(entry.added_at ?? "")}
+                  {entry.type} · {timeAgo(entry.added_at ?? "")} · {formatAbsoluteDate(entry.added_at ?? "")}
                 </p>
               </div>
               <button
