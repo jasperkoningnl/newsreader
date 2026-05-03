@@ -2,6 +2,41 @@
 
 import type { EditionItem } from "./api/edition/today/route";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+function RefreshButton() {
+  const router = useRouter();
+  const [state, setState] = useState<"idle" | "loading">("idle");
+
+  async function handleRefresh() {
+    setState("loading");
+    try {
+      await fetch("/api/edition/today?force=true");
+      router.refresh();
+    } finally {
+      setState("idle");
+    }
+  }
+
+  return (
+    <button
+      onClick={handleRefresh}
+      disabled={state === "loading"}
+      className="mt-6 flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-sm transition-colors disabled:opacity-40"
+    >
+      <svg
+        className={`w-4 h-4 ${state === "loading" ? "animate-spin" : ""}`}
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      {state === "loading" ? "Bezig…" : "Ververs feed"}
+    </button>
+  );
+}
 
 function Card({ item, index }: { item: EditionItem; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
@@ -101,7 +136,7 @@ function EndCard({ createdAt }: { createdAt: string | null }) {
         Volgende editie {tomorrowStr}
       </p>
       {createdAt && (
-        <p className="mt-8 text-xs text-white/20">
+        <p className="mt-6 text-xs text-white/20">
           Editie van{" "}
           {new Date(createdAt).toLocaleDateString("nl-NL", {
             weekday: "long",
@@ -110,6 +145,7 @@ function EndCard({ createdAt }: { createdAt: string | null }) {
           })}
         </p>
       )}
+      <RefreshButton />
     </div>
   );
 }

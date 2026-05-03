@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { articles, editions, sources } from "@/db/schema";
 import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { generateEdition } from "@/lib/generate-edition";
 import { fetchAllFeeds } from "@/lib/fetch-feeds";
 
@@ -23,9 +23,10 @@ export type TodayEdition = {
   items: EditionItem[];
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const edition = await getOrGenerateToday();
+    const force = req.nextUrl.searchParams.get("force") === "true";
+    const edition = await getOrGenerateToday(force);
     return NextResponse.json(edition);
   } catch (error) {
     console.error("GET /api/edition/today:", error);
@@ -34,21 +35,23 @@ export async function GET() {
   }
 }
 
-export async function getOrGenerateToday(): Promise<TodayEdition> {
+export async function getOrGenerateToday(force = false): Promise<TodayEdition> {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [latest] = await db
-    .select()
-    .from(editions)
-    .orderBy(desc(editions.created_at))
-    .limit(1);
+  if (!force) {
+    const [latest] = await db
+      .select()
+      .from(editions)
+      .orderBy(desc(editions.created_at))
+      .limit(1);
 
-  if (latest && new Date(latest.created_at ?? 0) >= todayStart) {
-    return buildEdition(latest);
+    if (latest && new Date(latest.created_at ?? 0) >= todayStart) {
+      return buildEdition(latest);
+    }
   }
 
-  // Zorg dat er genoeg ongelezen artikelen zijn
+  // Haal altijd verse feeds op bij force, anders alleen als er te weinig kandidaten zijn
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
     .toISOString()
     .replace("T", " ")
@@ -59,7 +62,7 @@ export async function getOrGenerateToday(): Promise<TodayEdition> {
     .from(articles)
     .where(and(eq(articles.read, 0), gte(articles.fetched_at, threeDaysAgo)));
 
-  if (candidateCount < 5) {
+  if (force || candidateCount < 5) {
     await fetchAllFeeds();
   }
 
