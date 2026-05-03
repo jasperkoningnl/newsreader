@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import { PwaRegister } from "@/components/pwa-register";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "The Feed",
-  description: "Jasper's personal newsreader",
+  title: "Newsreader",
+  description: "Personal newsreader",
 };
 
 const navItems = [
@@ -20,7 +21,16 @@ const navItems = [
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${geist.variable} h-full antialiased`}>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Newsreader" />
+        <link rel="apple-touch-icon" href="/icon-192.svg" />
+      </head>
       <body className="h-full bg-black text-white">
+        <PwaRegister />
         <div className="flex h-full">
           <aside className="hidden md:flex w-[120px] shrink-0 border-r border-white/10 bg-black flex-col py-6">
             <div className="px-4 text-3xl font-extrabold tracking-tight [writing-mode:vertical-rl] rotate-180 text-white/85">The Feed</div>
