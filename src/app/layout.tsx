@@ -7,18 +7,8 @@ import { PwaRegister } from "@/components/pwa-register";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "The Feed",
-  description: "Jasper's personal newsreader",
-  manifest: "/manifest.webmanifest",
-  themeColor: "#000000",
-  appleWebApp: {
-    capable: true,
-    title: "The Feed",
-    statusBarStyle: "black-translucent",
-  },
-  icons: {
-    apple: "/icon-192.png",
-  },
+  title: "Newsreader",
+  description: "Personal newsreader",
 };
 
 const navItems = [
@@ -31,6 +21,14 @@ const navItems = [
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${geist.variable} h-full antialiased`}>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Newsreader" />
+        <link rel="apple-touch-icon" href="/icon-192.svg" />
+      </head>
       <body className="h-full bg-black text-white">
         <PwaRegister />
         <div className="flex h-full">

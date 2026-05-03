@@ -1,5 +1,5 @@
 const CACHE_NAME = 'the-feed-v1';
-const APP_SHELL = ['/', '/manifest.webmanifest', '/offline.html', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
+const APP_SHELL = ['/', '/manifest.webmanifest', '/offline.html', '/icon-192.svg', '/icon-512.svg', '/icon-maskable.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
