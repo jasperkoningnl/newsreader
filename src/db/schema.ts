@@ -40,6 +40,15 @@ export const taste_entries = sqliteTable("taste_entries", {
   added_at: text("added_at").default(sql`(datetime('now'))`),
 });
 
+export const article_likes = sqliteTable("article_likes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  article_id: integer("article_id").notNull().references(() => articles.id),
+  source_id: integer("source_id").references(() => sources.id),
+  topic: text("topic"),
+  liked: integer("liked").default(1),
+  created_at: text("created_at").default(sql`(datetime('now'))`),
+});
+
 export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 export type Article = typeof articles.$inferSelect;
@@ -47,3 +56,5 @@ export type NewArticle = typeof articles.$inferInsert;
 export type Edition = typeof editions.$inferSelect;
 export type TasteEntry = typeof taste_entries.$inferSelect;
 export type NewTasteEntry = typeof taste_entries.$inferInsert;
+export type ArticleLike = typeof article_likes.$inferSelect;
+export type NewArticleLike = typeof article_likes.$inferInsert;

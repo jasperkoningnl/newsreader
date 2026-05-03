@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
-import { articles, editions, sources, taste_entries } from "@/db/schema";
+import { article_likes, articles, editions, sources, taste_entries } from "@/db/schema";
 import { and, desc, eq, gte, inArray, isNotNull, ne } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -25,6 +25,33 @@ const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
 const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur"]);
 
+type PreferenceContext = {
+  preferredSources: Set<string>;
+  preferredTopics: Set<string>;
+};
+
+async function fetchPreferenceContext(): Promise<PreferenceContext> {
+  const likes = await db
+    .select({ source: sources.name, topic: article_likes.topic })
+    .from(article_likes)
+    .leftJoin(sources, eq(article_likes.source_id, sources.id))
+    .where(eq(article_likes.liked, 1));
+
+  const sourceCounts: Record<string, number> = {};
+  const topicCounts: Record<string, number> = {};
+  for (const row of likes) {
+    const source = (row.source ?? "").trim();
+    const topic = String(row.topic ?? "overig").toLowerCase().trim() || "overig";
+    if (source) sourceCounts[source] = (sourceCounts[source] ?? 0) + 1;
+    topicCounts[topic] = (topicCounts[topic] ?? 0) + 1;
+  }
+
+  return {
+    preferredSources: new Set(Object.entries(sourceCounts).filter(([, n]) => n > 3).map(([k]) => k)),
+    preferredTopics: new Set(Object.entries(topicCounts).filter(([, n]) => n > 3).map(([k]) => k)),
+  };
+}
+
 async function fetchTasteContext(): Promise<string> {
   const recent = await db
     .select()
@@ -41,7 +68,7 @@ async function fetchTasteContext(): Promise<string> {
   return `\nRecent bekeken/gelezen/gespeeld door Jasper (gebruik als extra signaal voor zijn smaak):\n${lines.join("\n")}\n`;
 }
 
-async function runCurator(candidates: Candidate[], profile: string, tasteContext: string): Promise<CuratorItem[]> {
+async function runCurator(candidates: Candidate[], profile: string, tasteContext: string, pref: PreferenceContext): Promise<CuratorItem[]> {
   const list = candidates
     .map(
       (a) =>
@@ -49,6 +76,7 @@ async function runCurator(candidates: Candidate[], profile: string, tasteContext
     )
     .join("\n\n");
 
+  const prefContext = `\nVoorrang op basis van likes (>3):\n- Bronnen: ${[...pref.preferredSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.preferredTopics].join(", ") || "geen"}\n`;
   const msg = await client.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 1500,
@@ -58,7 +86,7 @@ async function runCurator(candidates: Candidate[], profile: string, tasteContext
         content: `Je bent de redacteur van Jasper's persoonlijke nieuwsfeed.
 
 Hier is Jasper's profiel en smaakvoorkeur:
-${profile}${tasteContext}
+${profile}${tasteContext}${prefContext}
 
 Selecteer precies 15 artikelen uit de onderstaande lijst die samen de beste dagelijkse feed vormen.
 Context: de app publiceert uiteindelijk 10 items. Deze overselectie (15 -> 10)
@@ -255,6 +283,14 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
       countPerSource[a.source] = n + 1;
     }
   }
+  const pref = await fetchPreferenceContext();
+  const score = (c: Candidate) => {
+    const cat = String(c.category ?? "overig").toLowerCase();
+    return (pref.preferredSources.has(c.source) ? 2 : 0) + (pref.preferredTopics.has(cat) ? 2 : 0);
+  };
+
+  candidates.sort((a, b) => score(b) - score(a));
+
   const seed = process.env.CURATOR_DEBUG_SEED ?? "";
   if (seed) {
     const seeded = (s: string) => {
@@ -276,7 +312,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
 
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
   const tasteContext = await fetchTasteContext();
-  const raw = await runCurator(candidates, profile, tasteContext);
+  const raw = await runCurator(candidates, profile, tasteContext, pref);
   const constrained = enforceConstraints(raw, candidates);
   const selected = constrained.items.slice(0, EDITION_SIZE);
 
@@ -290,6 +326,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     selected_count: selected.length,
     violations: constrained.violations,
     seed: seed || null,
+    preferred_sources: [...pref.preferredSources],
+    preferred_topics: [...pref.preferredTopics],
   }));
 
   await db
