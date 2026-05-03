@@ -51,6 +51,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Bronnen
           </Link>
           <Link
+            href="/bewaard"
+            className="flex-1 flex flex-col items-center gap-1 py-3 text-xs text-white/50 hover:text-white transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M5 5.75A1.75 1.75 0 016.75 4h10.5A1.75 1.75 0 0119 5.75v14.19a.75.75 0 01-1.21.59L12 16.2l-5.79 4.34A.75.75 0 015 19.94V5.75z" />
+            </svg>
+            Bewaard
+          </Link>
+          <Link
             href="/smaak"
             className="flex-1 flex flex-col items-center gap-1 py-3 text-xs text-white/50 hover:text-white transition-colors"
           >

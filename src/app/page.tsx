@@ -12,6 +12,9 @@ export default async function FeedPage() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
+  let showFeedLoader = true;
+  let editionData: Awaited<ReturnType<typeof getOrGenerateToday>> | null = null;
+
   try {
     const [latest] = await db
       .select()
@@ -20,13 +23,17 @@ export default async function FeedPage() {
       .limit(1);
 
     if (latest && new Date(latest.created_at ?? 0) >= todayStart) {
-      const edition = await getOrGenerateToday();
-      return <FeedCards items={edition.items} createdAt={edition.created_at} />;
+      editionData = await getOrGenerateToday();
+      showFeedLoader = false;
     }
   } catch {
     // DB niet bereikbaar of geen editie — FeedLoader handelt het af
   }
 
-  // Geen editie van vandaag: client-side laden + genereren
-  return <FeedLoader />;
+  if (showFeedLoader || !editionData) {
+    // Geen editie van vandaag: client-side laden + genereren
+    return <FeedLoader />;
+  }
+
+  return <FeedCards items={editionData.items} createdAt={editionData.created_at} />;
 }
