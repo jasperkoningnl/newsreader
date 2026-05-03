@@ -123,7 +123,28 @@ function meetsGlobalRules(items: Candidate[]): boolean {
   return hasNl && hasLongread && breakingCount <= 2 && hasSurprise;
 }
 
-function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): CuratorItem[] {
+function getConstraintViolations(items: Candidate[]): string[] {
+  const violations: string[] = [];
+  const sourceCounts = items.reduce<Record<string, number>>((acc, i) => {
+    acc[i.source] = (acc[i.source] ?? 0) + 1;
+    return acc;
+  }, {});
+  const categoryCounts = items.reduce<Record<string, number>>((acc, i) => {
+    const cat = (i.category ?? "overig").toLowerCase();
+    acc[cat] = (acc[cat] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  if (!items.some((i) => NL_SOURCES.has(i.source))) violations.push("missing_nl_item");
+  if (!items.some(isLongread)) violations.push("missing_longread");
+  if (!items.some(isSurprise)) violations.push("missing_surprise");
+  if (items.filter(isBreaking).length > 2) violations.push("too_many_breaking");
+  if (Object.values(sourceCounts).some((n) => n > SOURCE_LIMIT)) violations.push("source_limit_exceeded");
+  if (Object.values(categoryCounts).some((n) => n > 3)) violations.push("category_limit_exceeded");
+  return violations;
+}
+
+function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): { items: CuratorItem[]; violations: string[] } {
   const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const curatedById = Object.fromEntries(selected.map((s) => [s.id, s]));
 
@@ -183,11 +204,12 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): C
   }
 
   current = asCandidates();
-  if (!meetsGlobalRules(current)) {
-    console.warn("Curator constraints not fully satisfied after repair pass");
+  const violations = getConstraintViolations(current);
+  if (violations.length > 0 || !meetsGlobalRules(current)) {
+    console.warn("[edition.constraints] not_fully_satisfied", { violations });
   }
 
-  return result;
+  return { items: result, violations };
 }
 
 const MAX_PER_SOURCE = SOURCE_LIMIT;
@@ -228,8 +250,17 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
       countPerSource[a.source] = n + 1;
     }
   }
-  // Shuffle so the curator doesn't see sources in alphabetical/fetch order.
-  candidates.sort(() => Math.random() - 0.5);
+  const seed = process.env.CURATOR_DEBUG_SEED ?? "";
+  if (seed) {
+    const seeded = (s: string) => {
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+      return h >>> 0;
+    };
+    candidates.sort((a, b) => seeded(`${seed}:${a.id}`) - seeded(`${seed}:${b.id}`));
+  } else {
+    candidates.sort(() => Math.random() - 0.5);
+  }
 
   if (candidates.length < 5) {
     throw new Error("Te weinig kandidaat-artikelen (< 5). Haal eerst feeds op.");
@@ -241,12 +272,20 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
   const tasteContext = await fetchTasteContext();
   const raw = await runCurator(candidates, profile, tasteContext);
-  const selected = enforceConstraints(raw, candidates).slice(0, EDITION_SIZE);
+  const constrained = enforceConstraints(raw, candidates);
+  const selected = constrained.items.slice(0, EDITION_SIZE);
 
   if (!selected.length) throw new Error("Curator selecteerde geen artikelen na constraints");
 
   const itemsJson = JSON.stringify(selected);
   const [edition] = await db.insert(editions).values({ items_json: itemsJson }).returning();
+  console.log("[edition.generated]", JSON.stringify({
+    edition_id: edition.id,
+    candidate_count: candidates.length,
+    selected_count: selected.length,
+    violations: constrained.violations,
+    seed: seed || null,
+  }));
 
   await db
     .update(articles)

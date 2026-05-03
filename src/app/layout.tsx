@@ -8,12 +8,26 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 export const metadata: Metadata = {
   title: "Newsreader",
   description: "Jasper's persoonlijke nieuwsreader",
+  manifest: "/manifest.webmanifest",
+  openGraph: {
+    title: "Newsreader",
+    description: "Jasper's persoonlijke nieuwsreader",
+    images: ["/og.svg"],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Newsreader",
+    description: "Jasper's persoonlijke nieuwsreader",
+    images: ["/og.svg"],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl" className={`${geist.variable} h-full antialiased`}>
       <body className="h-full flex flex-col bg-black text-white">
+        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}` }} />
         <main className="flex-1 overflow-auto">{children}</main>
         <nav className="flex border-t border-white/10 bg-black/90 backdrop-blur-sm">
           <Link
