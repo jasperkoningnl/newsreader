@@ -2,6 +2,8 @@ import { db } from "@/db";
 import { articles, editions, sources } from "@/db/schema";
 import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+
+export const maxDuration = 300;
 import { generateEdition } from "@/lib/generate-edition";
 import { fetchAllFeeds } from "@/lib/fetch-feeds";
 
