@@ -4,37 +4,51 @@ import type { EditionItem } from "./api/edition/today/route";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type RefreshState = "idle" | "busy" | "error";
+
 function RefreshButton() {
   const router = useRouter();
-  const [state, setState] = useState<"idle" | "loading">("idle");
+  const [state, setState] = useState<RefreshState>("idle");
+  const [status, setStatus] = useState("");
 
   async function handleRefresh() {
-    setState("loading");
+    setState("busy");
+    setStatus("Feeds ophalen & editie genereren…");
     try {
-      await fetch("/api/edition/today?force=true");
-      router.refresh();
-    } finally {
+      const res = await fetch("/api/refresh", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Mislukt");
+      setStatus(`${data.count} items, ${data.feeds.ok} feeds ok, ${data.feeds.failed} mislukt`);
       setState("idle");
+      router.refresh();
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Onbekende fout");
+      setState("error");
     }
   }
 
   return (
-    <button
-      onClick={handleRefresh}
-      disabled={state === "loading"}
-      className="mt-6 flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-sm transition-colors disabled:opacity-40"
-    >
-      <svg
-        className={`w-4 h-4 ${state === "loading" ? "animate-spin" : ""}`}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
+    <div className="mt-6 flex flex-col items-center gap-2">
+      <button
+        onClick={handleRefresh}
+        disabled={state === "busy"}
+        className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-sm transition-colors disabled:opacity-40"
       >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-      {state === "loading" ? "Bezig…" : "Ververs feed"}
-    </button>
+        <svg
+          className={`w-4 h-4 flex-shrink-0 ${state === "busy" ? "animate-spin" : ""}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        {state === "busy" ? "Bezig…" : "Ververs feed"}
+      </button>
+      {status && (
+        <p className={`text-xs ${state === "error" ? "text-red-400" : "text-white/40"}`}>
+          {status}
+        </p>
+      )}
+    </div>
   );
 }
 
