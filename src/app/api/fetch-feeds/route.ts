@@ -1,6 +1,8 @@
 import { fetchAllFeeds } from "@/lib/fetch-feeds";
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 300;
+
 export async function POST(req: NextRequest) {
   const cronSecret = req.headers.get("x-cron-secret");
   if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {

@@ -16,7 +16,7 @@ const parser = new Parser<Record<string, unknown>, RssItem>({
       ["media:thumbnail", "mediaThumbnail", { keepArray: false }],
     ],
   },
-  timeout: 10000,
+  timeout: 8000,
 });
 
 function decodeHtmlEntities(str: string): string {
@@ -32,19 +32,14 @@ function decodeHtmlEntities(str: string): string {
 }
 
 function extractImageUrl(item: RssItem): string | null {
-  // media:content
   if (item.mediaContent?.$?.url) return item.mediaContent.$.url;
-  // media:thumbnail
   if (item.mediaThumbnail?.$?.url) return item.mediaThumbnail.$.url;
-  // enclosure (audio/video feeds have type; image enclosures don't always set type)
   if (item.enclosure?.url) {
     const type = item.enclosure.type ?? "";
     if (!type || type.startsWith("image/")) return item.enclosure.url;
   }
-  // <img> in content:encoded
   const imgMatch = item.content?.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (imgMatch) return imgMatch[1];
-  return null;
+  return imgMatch ? imgMatch[1] : null;
 }
 
 export type FetchResult = {
@@ -54,51 +49,62 @@ export type FetchResult = {
   error: string | null;
 };
 
-export async function fetchAllFeeds(): Promise<FetchResult[]> {
-  const activeSources = await db.select().from(sources).where(eq(sources.active, 1));
-  const results: FetchResult[] = [];
-
-  for (const source of activeSources) {
-    if (!source.feed_url) {
-      console.log(`[fetch-feeds] SKIP ${source.name}: geen feed_url`);
-      results.push({ source: source.name, fetched: 0, skipped: 0, error: "geen feed_url" });
-      continue;
-    }
-
-    try {
-      const feed = await parser.parseURL(source.feed_url);
-      let fetched = 0;
-      let skipped = 0;
-
-      for (const item of feed.items.slice(0, 20)) {
-        if (!item.title || !item.link) { skipped++; continue; }
-
-        const result = await db
-          .insert(articles)
-          .values({
-            source_id: source.id,
-            title: decodeHtmlEntities(item.title),
-            url: item.link,
-            description: item.contentSnippet
-              ? decodeHtmlEntities(item.contentSnippet.slice(0, 500))
-              : null,
-            image_url: extractImageUrl(item),
-            published_at: item.pubDate ?? item.isoDate ?? null,
-            category: source.category,
-          })
-          .onConflictDoNothing();
-
-        if (result.rowsAffected > 0) fetched++; else skipped++;
-      }
-
-      console.log(`[fetch-feeds] OK  ${source.name}: ${fetched} nieuw, ${skipped} al bekend`);
-      results.push({ source: source.name, fetched, skipped, error: null });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[fetch-feeds] ERR ${source.name} (${source.feed_url}): ${message}`);
-      results.push({ source: source.name, fetched: 0, skipped: 0, error: message });
-    }
+async function fetchOneFeed(source: typeof sources.$inferSelect): Promise<FetchResult> {
+  if (!source.feed_url) {
+    return { source: source.name, fetched: 0, skipped: 0, error: "geen feed_url" };
   }
 
+  try {
+    const feed = await parser.parseURL(source.feed_url);
+    let fetched = 0;
+    let skipped = 0;
+
+    for (const item of feed.items.slice(0, 20)) {
+      if (!item.title || !item.link) { skipped++; continue; }
+
+      const result = await db
+        .insert(articles)
+        .values({
+          source_id: source.id,
+          title: decodeHtmlEntities(item.title),
+          url: item.link,
+          description: item.contentSnippet
+            ? decodeHtmlEntities(item.contentSnippet.slice(0, 500))
+            : null,
+          image_url: extractImageUrl(item),
+          published_at: item.pubDate ?? item.isoDate ?? null,
+          category: source.category,
+        })
+        .onConflictDoNothing();
+
+      if (result.rowsAffected > 0) fetched++; else skipped++;
+    }
+
+    console.log(`[fetch-feeds] OK  ${source.name}: ${fetched} nieuw, ${skipped} al bekend`);
+    return { source: source.name, fetched, skipped, error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[fetch-feeds] ERR ${source.name} (${source.feed_url}): ${message}`);
+    return { source: source.name, fetched: 0, skipped: 0, error: message };
+  }
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<FetchResult>
+): Promise<FetchResult[]> {
+  const results: FetchResult[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const batchResults = await Promise.all(batch.map(fn));
+    results.push(...batchResults);
+  }
   return results;
+}
+
+export async function fetchAllFeeds(): Promise<FetchResult[]> {
+  const activeSources = await db.select().from(sources).where(eq(sources.active, 1));
+  console.log(`[fetch-feeds] ${activeSources.length} actieve bronnen, ophalen in batches van 10`);
+  return runWithConcurrency(activeSources, 10, fetchOneFeed);
 }
