@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
-import { articles, editions, sources } from "@/db/schema";
+import { articles, editions, sources, taste_entries } from "@/db/schema";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -19,7 +19,23 @@ type Candidate = {
 
 type CuratorItem = { id: number; motivatie: string };
 
-async function runCurator(candidates: Candidate[], profile: string): Promise<CuratorItem[]> {
+async function fetchTasteContext(): Promise<string> {
+  const recent = await db
+    .select()
+    .from(taste_entries)
+    .orderBy(desc(taste_entries.added_at))
+    .limit(30);
+
+  if (!recent.length) return "";
+
+  const lines = recent.map(
+    (e) =>
+      `${e.liked ? "✓" : "✗"} [${e.type}] ${e.title}${e.notes ? ` — ${e.notes}` : ""}`
+  );
+  return `\nRecent bekeken/gelezen/gespeeld door Jasper (gebruik als extra signaal voor zijn smaak):\n${lines.join("\n")}\n`;
+}
+
+async function runCurator(candidates: Candidate[], profile: string, tasteContext: string): Promise<CuratorItem[]> {
   const list = candidates
     .map(
       (a) =>
@@ -36,7 +52,7 @@ async function runCurator(candidates: Candidate[], profile: string): Promise<Cur
         content: `Je bent de redacteur van Jasper's persoonlijke nieuwsfeed.
 
 Hier is Jasper's profiel en smaakvoorkeur:
-${profile}
+${profile}${tasteContext}
 
 Selecteer precies 15 artikelen uit de onderstaande lijst die samen de beste dagelijkse feed vormen.
 
@@ -133,7 +149,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   console.log(`Curator: ${candidates.length} kandidaten van ${uniqueSources.size} bronnen:`, [...uniqueSources].join(", "));
 
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
-  const raw = await runCurator(candidates, profile);
+  const tasteContext = await fetchTasteContext();
+  const raw = await runCurator(candidates, profile, tasteContext);
   const selected = enforceConstraints(raw, candidates).slice(0, EDITION_SIZE);
 
   if (!selected.length) throw new Error("Curator selecteerde geen artikelen na constraints");
