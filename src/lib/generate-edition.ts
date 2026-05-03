@@ -7,16 +7,23 @@ import { join } from "path";
 
 const client = new Anthropic();
 
+type Candidate = {
+  id: number;
+  title: string;
+  description: string | null;
+  url: string;
+  category: string | null;
+  published_at: string | null;
+  source: string;
+};
+
 type CuratorItem = { id: number; motivatie: string };
 
-async function runCurator(
-  candidates: { id: number; title: string; description: string | null; source: string; category: string | null }[],
-  profile: string
-): Promise<CuratorItem[]> {
+async function runCurator(candidates: Candidate[], profile: string): Promise<CuratorItem[]> {
   const list = candidates
     .map(
       (a) =>
-        `ID ${a.id} | ${a.source} | ${a.category ?? "overig"} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`
+        `ID ${a.id} | bron: ${a.source} | categorie: ${a.category ?? "overig"} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`
     )
     .join("\n\n");
 
@@ -33,14 +40,21 @@ ${profile}
 
 Selecteer precies 10 artikelen uit de onderstaande lijst die samen de beste dagelijkse feed vormen.
 
-Regels:
-- Nooit meer dan 3 items uit dezelfde categorie
-- Altijd minstens 1 Nederlandstalig item (NOS, NRC, FTM)
+HARDE REGELS (verplicht, geen uitzonderingen):
+- Maximaal 2 items van dezelfde bron (bijv. max 2 van "The Verge", max 2 van "TechCrunch")
+- Maximaal 3 items uit dezelfde categorie
+- Altijd minstens 1 Nederlandstalig item (bron: NOS Nieuws, NRC, of Follow the Money)
 - Minstens 1 longread (schat in op basis van titel/beschrijving)
 - Maximaal 2 breaking-news items; de rest moet een dag later nog leesbaar zijn
 - 1 verrassingsitem buiten de verwachte interesses (serendipity)
-- Viral longreads en non-fictie boekentips zijn altijd welkom
-- Gewenste mix: 2-3 tech/AI, 1-2 serie/film, 1-2 nieuws/geopolitiek, 1 sport of games, 1 wetenschap/cultuur, 1 verrassing
+
+GEWENSTE MIX:
+- 2-3 tech/AI (waarvan max 1 van dezelfde tech-bron)
+- 1-2 serie/film/streaming
+- 1-2 nieuws of geopolitiek (analyse, geen breaking)
+- 1 sport of games
+- 1 wetenschap of cultuur
+- 1 verrassing
 
 Kandidaat-artikelen:
 ${list}
@@ -55,6 +69,27 @@ Antwoord uitsluitend als geldig JSON array (geen markdown, geen tekst erbuiten):
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) throw new Error(`Curator gaf geen geldig JSON: ${text.slice(0, 200)}`);
   return JSON.parse(match[0]) as CuratorItem[];
+}
+
+function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): CuratorItem[] {
+  const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
+  const sourceCounts: Record<string, number> = {};
+  const categoryCounts: Record<string, number> = {};
+  const result: CuratorItem[] = [];
+
+  for (const item of selected) {
+    const c = byId[item.id];
+    if (!c) continue;
+    const src = c.source;
+    const cat = c.category ?? "overig";
+    if ((sourceCounts[src] ?? 0) >= 2) continue;
+    if ((categoryCounts[cat] ?? 0) >= 3) continue;
+    sourceCounts[src] = (sourceCounts[src] ?? 0) + 1;
+    categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+    result.push(item);
+  }
+
+  return result;
 }
 
 export async function generateEdition(): Promise<{ edition_id: number; count: number }> {
@@ -82,9 +117,14 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     throw new Error("Te weinig kandidaat-artikelen (< 5). Haal eerst feeds op.");
   }
 
+  const uniqueSources = new Set(candidates.map((c) => c.source));
+  console.log(`Curator: ${candidates.length} kandidaten van ${uniqueSources.size} bronnen:`, [...uniqueSources].join(", "));
+
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
-  const selected = await runCurator(candidates, profile);
-  if (!selected.length) throw new Error("Curator selecteerde geen artikelen");
+  const raw = await runCurator(candidates, profile);
+  const selected = enforceConstraints(raw, candidates);
+
+  if (!selected.length) throw new Error("Curator selecteerde geen artikelen na constraints");
 
   const itemsJson = JSON.stringify(selected);
   const [edition] = await db.insert(editions).values({ items_json: itemsJson }).returning();
