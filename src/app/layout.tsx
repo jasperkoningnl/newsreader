@@ -8,69 +8,39 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 export const metadata: Metadata = {
   title: "Newsreader",
   description: "Jasper's persoonlijke nieuwsreader",
-  manifest: "/manifest.webmanifest",
-  openGraph: {
-    title: "Newsreader",
-    description: "Jasper's persoonlijke nieuwsreader",
-    images: ["/og.svg"],
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Newsreader",
-    description: "Jasper's persoonlijke nieuwsreader",
-    images: ["/og.svg"],
-  },
 };
+
+const navItems = [
+  { href: "/", label: "Feed" },
+  { href: "/bronnen", label: "Bronnen" },
+  { href: "/smaak", label: "Smaak" },
+  { href: "/bewaard", label: "Bewaard" },
+];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl" className={`${geist.variable} h-full antialiased`}>
-      <body className="h-full flex flex-col bg-black text-white">
-        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}` }} />
-        <main className="flex-1 overflow-auto">{children}</main>
-        <nav className="flex border-t border-white/10 bg-black/90 backdrop-blur-sm">
-          <Link
-            href="/"
-            className="flex-1 flex flex-col items-center gap-1 py-3 text-xs text-white/50 hover:text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 12h6m-6-4h6" />
-            </svg>
-            Feed
-          </Link>
-          <Link
-            href="/bronnen"
-            className="flex-1 flex flex-col items-center gap-1 py-3 text-xs text-white/50 hover:text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7M6 17a1 1 0 110 2 1 1 0 010-2z" />
-            </svg>
-            Bronnen
-          </Link>
-          <Link
-            href="/bewaard"
-            className="flex-1 flex flex-col items-center gap-1 py-3 text-xs text-white/50 hover:text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M5 5.75A1.75 1.75 0 016.75 4h10.5A1.75 1.75 0 0119 5.75v14.19a.75.75 0 01-1.21.59L12 16.2l-5.79 4.34A.75.75 0 015 19.94V5.75z" />
-            </svg>
-            Bewaard
-          </Link>
-          <Link
-            href="/smaak"
-            className="flex-1 flex flex-col items-center gap-1 py-3 text-xs text-white/50 hover:text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
-            Smaak
-          </Link>
-        </nav>
+      <body className="h-full bg-black text-white">
+        <div className="flex h-full">
+          <aside className="hidden md:flex w-[120px] shrink-0 border-r border-white/10 bg-black flex-col py-6">
+            <div className="px-4 text-3xl font-extrabold tracking-tight [writing-mode:vertical-rl] rotate-180 text-white/85">Editorial</div>
+            <nav className="mt-12 flex flex-col gap-8 px-4 text-white/65">
+              {navItems.map((item) => (
+                <Link key={item.href} href={item.href} className="metadata-caps hover:text-white transition-colors">{item.label}</Link>
+              ))}
+            </nav>
+          </aside>
+          <div className="flex-1 flex flex-col min-h-0">
+            <main className="flex-1 overflow-auto">{children}</main>
+            <nav className="md:hidden h-[72px] flex border-t border-white/10 bg-black">
+              {navItems.map((item) => (
+                <Link key={item.href} href={item.href} className="flex-1 flex items-center justify-center text-[12px] tracking-[0.02em] text-white/40 hover:text-white">
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
       </body>
     </html>
   );
