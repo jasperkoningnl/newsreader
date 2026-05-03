@@ -126,19 +126,28 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
   const handleLike = async (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (liking || liked) return;
+    if (liking) return;
+    const nextLiked = !liked;
     setLiking(true);
     try {
       const res = await fetch(`/api/articles/${item.id}/like`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ liked: true }),
+        body: JSON.stringify({ liked: nextLiked }),
       });
-      if (res.ok) setLiked(true);
+      if (res.ok) setLiked(nextLiked);
     } finally {
       setLiking(false);
     }
-  }
+  };
+
+  const publishedAt = item.published_at
+    ? new Date(item.published_at).toLocaleDateString("nl-NL", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
 
   return (
     <a
@@ -180,6 +189,12 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
               </span>
             </>
           )}
+          {publishedAt && (
+            <>
+              <span className="text-white/25">·</span>
+              <span className="text-xs text-white/35 tracking-wide">{publishedAt}</span>
+            </>
+          )}
         </div>
         <h2 className="text-[2rem] md:text-[2.2rem] font-bold leading-[1.1] tracking-[-0.03em] text-white">
           {item.title}
@@ -207,22 +222,14 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
             </button>
             <button
               type="button"
-              aria-label={liked ? "Geliket" : "Like artikel"}
+              aria-label={liked ? "Unlike artikel" : "Like artikel"}
               onClick={handleLike}
-              disabled={liking || liked}
+              disabled={liking}
               className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10 disabled:opacity-60"
             >
               {liked ? "♥" : liking ? "…" : "♡"}
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handleLike}
-            disabled={liking || liked}
-            className="text-xs rounded-full border border-white/30 px-2 py-1 text-white/80 disabled:opacity-60"
-          >
-            {liked ? "✓ Geliket" : liking ? "Opslaan…" : "♡ Like"}
-          </button>
         </div>
       </div>
     </a>
