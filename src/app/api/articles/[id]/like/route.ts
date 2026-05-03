@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const articleId = parseInt(id, 10);
     if (!Number.isInteger(articleId) || articleId <= 0) {
-      return NextResponse.json({ error: "Ongeldig artikel-id" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid article id" }, { status: 400 });
     }
 
     const body = await req.json().catch(() => ({}));
@@ -21,10 +21,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .limit(1);
 
     if (!article) {
-      return NextResponse.json({ error: "Artikel niet gevonden" }, { status: 404 });
+      return NextResponse.json({ error: "Article not found" }, { status: 404 });
     }
 
-    const topic = String(article.category ?? "overig").toLowerCase().trim() || "overig";
+    const topic = String(article.category ?? "other").toLowerCase().trim() || "other";
     await db.delete(article_likes).where(eq(article_likes.article_id, articleId));
 
     const [created] = await db
@@ -44,6 +44,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ ...created, source: sourceName, topic }, { status: 201 });
   } catch (error) {
     console.error("POST /api/articles/[id]/like:", error);
-    return NextResponse.json({ error: "Like opslaan mislukt" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save like" }, { status: 500 });
   }
 }

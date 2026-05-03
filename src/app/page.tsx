@@ -8,7 +8,7 @@ import FeedLoader from "./feed-loader";
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
-  // Check of er al een editie van vandaag is zonder die te genereren
+  // Check whether there is already an edition for today without generating one
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -27,11 +27,11 @@ export default async function FeedPage() {
       showFeedLoader = false;
     }
   } catch {
-    // DB niet bereikbaar of geen editie — FeedLoader handelt het af
+    // DB unavailable or no edition yet — FeedLoader handles it
   }
 
   if (showFeedLoader || !editionData) {
-    // Geen editie van vandaag: client-side laden + genereren
+    // No edition for today: load and generate client-side
     return <FeedLoader />;
   }
 

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("[cron/generate]", error);
-    const message = error instanceof Error ? error.message : "Genereren mislukt";
+    const message = error instanceof Error ? error.message : "Failed to generate";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -19,10 +19,10 @@ export async function GET(req: NextRequest) {
     const ok = results.filter((r) => r.error === null).length;
     const failed = results.filter((r) => r.error !== null).length;
     const newArticles = results.reduce((sum, r) => sum + r.fetched, 0);
-    console.log(`[cron/fetch-feeds] ${ok} ok, ${failed} fouten, ${newArticles} nieuwe artikelen`);
+    console.log(`[cron/fetch-feeds] ${ok} ok, ${failed} errors, ${newArticles} new articles`);
     return NextResponse.json({ ok, failed, newArticles });
   } catch (error) {
     console.error("[cron/fetch-feeds]", error);
-    return NextResponse.json({ error: "Ophalen mislukt" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }
 }

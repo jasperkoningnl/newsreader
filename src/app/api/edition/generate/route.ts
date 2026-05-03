@@ -9,7 +9,7 @@ export async function POST() {
     return NextResponse.json(result);
   } catch (error) {
     console.error("POST /api/edition/generate:", error);
-    const message = error instanceof Error ? error.message : "Genereren mislukt";
+    const message = error instanceof Error ? error.message : "Failed to generate";
     const status = message.includes("Te weinig") ? 422 : 500;
     return NextResponse.json({ error: message }, { status });
   }

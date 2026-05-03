@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="h-full bg-black text-white">
         <div className="flex h-full">
           <aside className="hidden md:flex w-[120px] shrink-0 border-r border-white/10 bg-black flex-col py-6">
-            <div className="px-4 text-3xl font-extrabold tracking-tight [writing-mode:vertical-rl] rotate-180 text-white/85">Editorial</div>
+            <div className="px-4 text-3xl font-extrabold tracking-tight [writing-mode:vertical-rl] rotate-180 text-white/85">The Feed</div>
             <nav className="mt-12 flex flex-col gap-8 px-4 text-white/65">
               {navItems.map((item) => (
                 <Link key={item.href} href={item.href} className="metadata-caps hover:text-white transition-colors">{item.label}</Link>
