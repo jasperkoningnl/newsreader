@@ -94,7 +94,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
       href={item.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="relative flex flex-col h-full snap-start overflow-hidden select-none"
+      className="relative flex flex-col h-full snap-start overflow-hidden select-none md:h-72 md:rounded-xl md:snap-align-none"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       {item.image_url && !imgFailed ? (
@@ -117,9 +117,9 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
       {/* gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/10" />
 
-      {/* scroll hint — top */}
+      {/* scroll hint — top (mobile only) */}
       {index > 0 && (
-        <div className="relative flex justify-center pt-3 opacity-30">
+        <div className="relative flex justify-center pt-3 opacity-30 md:hidden">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
           </svg>
@@ -157,8 +157,8 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
         </div>
       </div>
 
-      {/* scroll hint — bottom */}
-      <div className="relative flex justify-center pb-3 opacity-30">
+      {/* scroll hint — bottom (mobile only) */}
+      <div className="relative flex justify-center pb-3 opacity-30 md:hidden">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -177,7 +177,7 @@ function EndCard({ createdAt }: { createdAt: string | null }) {
   });
 
   return (
-    <div className="relative flex flex-col h-full snap-start items-center justify-center px-8 text-center bg-black">
+    <div className="relative flex flex-col h-full snap-start items-center justify-center px-8 text-center bg-black md:col-span-2 md:h-56 md:rounded-xl md:snap-align-none">
       <div className="text-5xl mb-6">🌿</div>
       <h2 className="text-2xl font-bold mb-2">Dat was het voor vandaag</h2>
       <p className="text-white/40 text-sm">
@@ -206,7 +206,7 @@ export default function FeedCards({
   createdAt: string | null;
 }) {
   return (
-    <div className="h-full overflow-y-scroll snap-y snap-mandatory">
+    <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-1 md:p-1 md:bg-neutral-950">
       {items.map((item, i) => (
         <Card key={item.id} item={item} index={i} />
       ))}
