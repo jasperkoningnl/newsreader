@@ -13,6 +13,7 @@
     "db:seed": "node --experimental-strip-types scripts/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@libsql/client": "^0.17.3",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
