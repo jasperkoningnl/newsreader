@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
 import { articles, editions, sources } from "@/db/schema";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -29,7 +29,7 @@ async function runCurator(candidates: Candidate[], profile: string): Promise<Cur
 
   const msg = await client.messages.create({
     model: "claude-haiku-4-5",
-    max_tokens: 1024,
+    max_tokens: 1500,
     messages: [
       {
         role: "user",
@@ -38,7 +38,7 @@ async function runCurator(candidates: Candidate[], profile: string): Promise<Cur
 Hier is Jasper's profiel en smaakvoorkeur:
 ${profile}
 
-Selecteer precies 10 artikelen uit de onderstaande lijst die samen de beste dagelijkse feed vormen.
+Selecteer precies 15 artikelen uit de onderstaande lijst die samen de beste dagelijkse feed vormen.
 
 HARDE REGELS (verplicht, geen uitzonderingen):
 - Maximaal 2 items van dezelfde bron (bijv. max 2 van "The Verge", max 2 van "TechCrunch")
@@ -87,13 +87,18 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): C
   return result;
 }
 
+const MAX_PER_SOURCE = 3;
+const EDITION_SIZE = 10;
+
 export async function generateEdition(): Promise<{ edition_id: number; count: number }> {
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
     .toISOString()
     .replace("T", " ")
     .slice(0, 19);
 
-  const candidates = await db
+  // Fetch all unread recent articles ordered newest-first, then cap per source so
+  // no single high-volume source dominates the curator's input.
+  const all = await db
     .select({
       id: articles.id,
       title: articles.title,
@@ -106,7 +111,19 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     .from(articles)
     .innerJoin(sources, eq(articles.source_id, sources.id))
     .where(and(eq(articles.read, 0), gte(articles.fetched_at, threeDaysAgo)))
-    .limit(60);
+    .orderBy(desc(articles.fetched_at));
+
+  const countPerSource: Record<string, number> = {};
+  const candidates: Candidate[] = [];
+  for (const a of all) {
+    const n = countPerSource[a.source] ?? 0;
+    if (n < MAX_PER_SOURCE) {
+      candidates.push(a);
+      countPerSource[a.source] = n + 1;
+    }
+  }
+  // Shuffle so the curator doesn't see sources in alphabetical/fetch order.
+  candidates.sort(() => Math.random() - 0.5);
 
   if (candidates.length < 5) {
     throw new Error("Te weinig kandidaat-artikelen (< 5). Haal eerst feeds op.");
@@ -117,7 +134,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
 
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
   const raw = await runCurator(candidates, profile);
-  const selected = enforceConstraints(raw, candidates);
+  const selected = enforceConstraints(raw, candidates).slice(0, EDITION_SIZE);
 
   if (!selected.length) throw new Error("Curator selecteerde geen artikelen na constraints");
 
