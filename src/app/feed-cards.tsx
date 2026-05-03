@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 
 type RefreshState = "idle" | "busy" | "error";
 
+const BATCH_SIZE = 15;
+
 function RefreshButton() {
   const router = useRouter();
   const [state, setState] = useState<RefreshState>("idle");
@@ -13,12 +15,44 @@ function RefreshButton() {
 
   async function handleRefresh() {
     setState("busy");
-    setStatus("Feeds ophalen & editie genereren…");
+    let totalOk = 0;
+    let totalFailed = 0;
+    const failures: { source: string; error: string }[] = [];
+
     try {
-      const res = await fetch("/api/refresh", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Mislukt");
-      setStatus(`${data.count} items, ${data.feeds.ok} feeds ok, ${data.feeds.failed} mislukt`);
+      // Fetch first batch to discover total
+      setStatus("Feeds ophalen…");
+      const firstRes = await fetch(`/api/fetch-feeds?offset=0&limit=${BATCH_SIZE}`, { method: "POST" });
+      const firstData = await firstRes.json();
+      if (!firstRes.ok) throw new Error(firstData.error ?? "Feeds ophalen mislukt");
+
+      const total: number = firstData.total;
+      totalOk += firstData.fetched_sources;
+      totalFailed += firstData.failed_sources;
+      failures.push(...(firstData.failures ?? []));
+
+      const batches = Math.ceil(total / BATCH_SIZE);
+
+      for (let batch = 1; batch < batches; batch++) {
+        const offset = batch * BATCH_SIZE;
+        setStatus(`Feeds ophalen ${Math.min(offset + BATCH_SIZE, total)}/${total}…`);
+        const res = await fetch(`/api/fetch-feeds?offset=${offset}&limit=${BATCH_SIZE}`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Feeds ophalen mislukt");
+        totalOk += data.fetched_sources;
+        totalFailed += data.failed_sources;
+        failures.push(...(data.failures ?? []));
+      }
+
+      setStatus("Editie genereren…");
+      const genRes = await fetch("/api/edition/generate", { method: "POST" });
+      const genData = await genRes.json();
+      if (!genRes.ok) throw new Error(genData.error ?? "Genereren mislukt");
+
+      const failureNote = failures.length
+        ? ` — ${failures.length} mislukt: ${failures.map((f) => f.source).join(", ")}`
+        : "";
+      setStatus(`${genData.count} items · ${totalOk} feeds ok · ${totalFailed} mislukt${failureNote}`);
       setState("idle");
       router.refresh();
     } catch (e) {
