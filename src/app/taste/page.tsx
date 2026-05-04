@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 const TYPES = ["series", "film", "book", "game", "music"];
 
-export default function SmaakPage() {
+export default function TastePage() {
   const [entries, setEntries] = useState<TasteEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");

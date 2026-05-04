@@ -7,15 +7,15 @@ import { PwaRegister } from "@/components/pwa-register";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "Newsreader",
+  title: "The Feed",
   description: "Personal newsreader",
 };
 
 const navItems = [
-  { href: "/", label: "Feed" },
-  { href: "/bronnen", label: "Sources" },
-  { href: "/smaak", label: "Taste" },
-  { href: "/bewaard", label: "Saved" },
+  { href: "/", label: "The Feed" },
+  { href: "/sources", label: "Sources" },
+  { href: "/taste", label: "Taste" },
+  { href: "/saved", label: "Saved" },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#000000" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="Newsreader" />
+        <meta name="apple-mobile-web-app-title" content="The Feed" />
         <link rel="apple-touch-icon" href="/icon-192.svg" />
       </head>
       <body className="h-full bg-black text-white">

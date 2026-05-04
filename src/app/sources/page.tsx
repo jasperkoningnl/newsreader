@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const DEFAULT_CATEGORIES = ["tech", "news", "series", "sports", "games", "science", "culture", "philosophy", "other"];
 type DiscoverState = "idle" | "loading" | "found" | "not-found";
 
-export default function BronnenPage() {
+export default function SourcesPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [urlInput, setUrlInput] = useState("");
@@ -33,7 +33,7 @@ export default function BronnenPage() {
   async function handleToggle(source: Source) { const res = await fetch(`/api/sources/${source.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: source.active === 0 ? 1 : 0 }) }); if (res.ok) { const updated = await res.json(); setSources((prev) => prev.map((s) => (s.id === updated.id ? updated : s))); } }
   async function handleCategoryChange(source: Source, category: string) { const res = await fetch(`/api/sources/${source.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category }) }); if (res.ok) { const updated = await res.json(); setSources((prev) => prev.map((s) => (s.id === updated.id ? updated : s))); } }
   async function handleDelete(source: Source) {
-    const confirmed = window.confirm(`Weet je zeker dat je '${source.name}' wilt verwijderen?`);
+    const confirmed = window.confirm(`Are you sure you want to remove '${source.name}'?`);
     if (!confirmed) return;
     const res = await fetch(`/api/sources/${source.id}`, { method: "DELETE" });
     if (res.ok) {
@@ -72,12 +72,12 @@ export default function BronnenPage() {
         </div>
         <div>
           <p className="metadata-caps mb-2 text-white/70">Or create new category</p>
-          <input list="categories" value={newCategoryInput} onChange={(e) => setNewCategoryInput(e.target.value)} placeholder="bijv. politiek" className="h-10 w-full rounded-full border border-white/20 bg-transparent px-4 text-sm" />
+          <input list="categories" value={newCategoryInput} onChange={(e) => setNewCategoryInput(e.target.value)} placeholder="e.g. politics" className="h-10 w-full rounded-full border border-white/20 bg-transparent px-4 text-sm" />
           <datalist id="categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
         </div>
       </div>
     </section>
-    <div className="mt-8 grid gap-6 md:grid-cols-2">{Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).map(([cat,items])=><section key={cat} className="rounded-3xl border border-white/10 bg-black/40 overflow-hidden"><div className="border-b border-white/10 p-5"><h2 className="text-4xl font-semibold capitalize tracking-[-0.02em]">{cat}</h2></div><ul className="divide-y divide-white/10">{items.map(source=><li key={source.id} className="flex items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="text-2xl leading-tight">{source.name}</p><p className="text-white/50">{source.url}</p></div><button onClick={()=>handleToggle(source)} className={`h-8 w-14 rounded-full border ${source.active?"bg-white border-white":"border-white/20"}`}><span className={`block h-6 w-6 rounded-full bg-black transition-transform ${source.active?"translate-x-6":"translate-x-1"}`} /></button><select value={source.category ?? "other"} onChange={(e)=>handleCategoryChange(source, e.target.value)} className="h-8 rounded-full border border-white/20 bg-transparent px-3 text-xs">{categories.map(c=><option key={c} value={c} className="bg-black">{c}</option>)}</select><button onClick={() => handleDelete(source)} className="rounded-full border border-red-400/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10">Verwijderen</button></li>)}</ul></section>)}</div>
+    <div className="mt-8 grid gap-6 md:grid-cols-2">{Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).map(([cat,items])=><section key={cat} className="rounded-3xl border border-white/10 bg-black/40 overflow-hidden"><div className="border-b border-white/10 p-5"><h2 className="text-4xl font-semibold capitalize tracking-[-0.02em]">{cat}</h2></div><ul className="divide-y divide-white/10">{items.map(source=><li key={source.id} className="flex items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="text-2xl leading-tight">{source.name}</p><p className="text-white/50">{source.url}</p></div><button onClick={()=>handleToggle(source)} className={`h-8 w-14 rounded-full border ${source.active?"bg-white border-white":"border-white/20"}`}><span className={`block h-6 w-6 rounded-full bg-black transition-transform ${source.active?"translate-x-6":"translate-x-1"}`} /></button><select value={source.category ?? "other"} onChange={(e)=>handleCategoryChange(source, e.target.value)} className="h-8 rounded-full border border-white/20 bg-transparent px-3 text-xs">{categories.map(c=><option key={c} value={c} className="bg-black">{c}</option>)}</select><button onClick={() => handleDelete(source)} className="rounded-full border border-red-400/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10">Remove</button></li>)}</ul></section>)}</div>
     {loading && <p className="mt-6 text-white/50">Loading…</p>}
     {!loading && !sources.length && <p className="mt-6 text-white/50">No sources yet.</p>}
   </div>;
