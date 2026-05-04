@@ -1,8 +1,11 @@
 import { db } from "@/db";
 import { sources } from "@/db/schema";
 import { NextRequest, NextResponse } from "next/server";
+import { requireSameOrigin } from "@/lib/api-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const unauthorized = requireSameOrigin(req);
+  if (unauthorized) return unauthorized;
   try {
     const all = await db.select().from(sources).orderBy(sources.category, sources.name);
     return NextResponse.json(all);
@@ -13,6 +16,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const unauthorized = requireSameOrigin(req);
+  if (unauthorized) return unauthorized;
   try {
     const body = await req.json();
     const { url, name, feed_url, category } = body;
