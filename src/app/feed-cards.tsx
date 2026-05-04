@@ -267,18 +267,28 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
               aria-label={liked ? "Unlike article" : "Like article"}
               onClick={handleLike}
               disabled={liking}
-              className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10 disabled:opacity-60"
+              className={`touch-active rounded-full border p-2 hover:bg-white/10 disabled:opacity-60 ${
+                liked ? "border-white bg-white/15 text-white" : "border-white/30 text-white/80"
+              }`}
             >
-              {liked ? "♥" : liking && !disliked ? "…" : "♡"}
+              <svg className="w-4 h-4" fill={liked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10H9.236a2 2 0 00-1.789 1.106L7 12v8m0 0H4a1 1 0 01-1-1v-7a1 1 0 011-1h3" />
+              </svg>
             </button>
             <button
               type="button"
               aria-label={disliked ? "Remove dislike" : "Less like this"}
               onClick={handleDislike}
               disabled={liking}
-              className="touch-active rounded-full border border-white/30 px-2.5 py-2 text-sm leading-none text-white/80 hover:bg-white/10 disabled:opacity-60"
+              className={`touch-active rounded-full border p-2 hover:bg-white/10 disabled:opacity-60 ${
+                disliked ? "border-white bg-white/15 text-white" : "border-white/30 text-white/80"
+              }`}
             >
-              {disliked ? "✕" : liking && !liked ? "…" : "−"}
+              <svg className="w-4 h-4" fill={disliked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.737 3h4.017c.163 0 .326.02.485.06L17 4m-7 10v5a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h4.764a2 2 0 001.789-1.106L17 12V4m0 0h3a1 1 0 011 1v7a1 1 0 01-1 1h-3" />
+              </svg>
             </button>
           </div>
         </div>
