@@ -19,6 +19,7 @@ export type EditionItem = {
   source: string;
   motivatie: string;
   liked: boolean;
+  disliked: boolean;
 };
 
 export type TodayEdition = {
@@ -101,7 +102,8 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
       published_at: articles.published_at,
       category: articles.category,
       source: sources.name,
-      liked: sql<number>`max(coalesce(${article_likes.liked}, 0))`,
+      liked: sql<number>`max(case when ${article_likes.liked} = 1 then 1 else 0 end)`,
+      disliked: sql<number>`max(case when ${article_likes.liked} = 0 then 1 else 0 end)`,
     })
     .from(articles)
     .innerJoin(sources, eq(articles.source_id, sources.id))
@@ -122,7 +124,7 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
   const items: EditionItem[] = parsed
     .map((p) => {
       const a = byId[p.id];
-      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked) } : null;
+      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked), disliked: Boolean(a.disliked) } : null;
     })
     .filter((x): x is EditionItem => x !== null);
 

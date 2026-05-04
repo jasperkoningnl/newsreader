@@ -28,27 +28,36 @@ const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games
 type PreferenceContext = {
   preferredSources: Set<string>;
   preferredTopics: Set<string>;
+  dislikedSources: Set<string>;
+  dislikedTopics: Set<string>;
 };
 
-async function fetchPreferenceContext(): Promise<PreferenceContext> {
-  const likes = await db
-    .select({ source: sources.name, topic: article_likes.topic })
-    .from(article_likes)
-    .leftJoin(sources, eq(article_likes.source_id, sources.id))
-    .where(eq(article_likes.liked, 1));
+const LIKE_THRESHOLD = 3;
+const DISLIKE_THRESHOLD = 2;
 
-  const sourceCounts: Record<string, number> = {};
-  const topicCounts: Record<string, number> = {};
-  for (const row of likes) {
+async function fetchPreferenceContext(): Promise<PreferenceContext> {
+  const rows = await db
+    .select({ source: sources.name, topic: article_likes.topic, liked: article_likes.liked })
+    .from(article_likes)
+    .leftJoin(sources, eq(article_likes.source_id, sources.id));
+
+  const likeSrc: Record<string, number> = {};
+  const likeTop: Record<string, number> = {};
+  const dislikeSrc: Record<string, number> = {};
+  const dislikeTop: Record<string, number> = {};
+  for (const row of rows) {
     const source = (row.source ?? "").trim();
     const topic = String(row.topic ?? "overig").toLowerCase().trim() || "overig";
-    if (source) sourceCounts[source] = (sourceCounts[source] ?? 0) + 1;
-    topicCounts[topic] = (topicCounts[topic] ?? 0) + 1;
+    const buckets = row.liked === 0 ? [dislikeSrc, dislikeTop] : [likeSrc, likeTop];
+    if (source) buckets[0][source] = (buckets[0][source] ?? 0) + 1;
+    buckets[1][topic] = (buckets[1][topic] ?? 0) + 1;
   }
 
   return {
-    preferredSources: new Set(Object.entries(sourceCounts).filter(([, n]) => n > 3).map(([k]) => k)),
-    preferredTopics: new Set(Object.entries(topicCounts).filter(([, n]) => n > 3).map(([k]) => k)),
+    preferredSources: new Set(Object.entries(likeSrc).filter(([, n]) => n > LIKE_THRESHOLD).map(([k]) => k)),
+    preferredTopics: new Set(Object.entries(likeTop).filter(([, n]) => n > LIKE_THRESHOLD).map(([k]) => k)),
+    dislikedSources: new Set(Object.entries(dislikeSrc).filter(([, n]) => n >= DISLIKE_THRESHOLD).map(([k]) => k)),
+    dislikedTopics: new Set(Object.entries(dislikeTop).filter(([, n]) => n >= DISLIKE_THRESHOLD).map(([k]) => k)),
   };
 }
 
@@ -76,7 +85,7 @@ async function runCurator(candidates: Candidate[], profile: string, tasteContext
     )
     .join("\n\n");
 
-  const prefContext = `\nVoorrang op basis van likes (>3):\n- Bronnen: ${[...pref.preferredSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.preferredTopics].join(", ") || "geen"}\n`;
+  const prefContext = `\nVoorrang op basis van likes (>3):\n- Bronnen: ${[...pref.preferredSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.preferredTopics].join(", ") || "geen"}\n\nDeprioriteer op basis van dislikes (≥2):\n- Bronnen: ${[...pref.dislikedSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.dislikedTopics].join(", ") || "geen"}\n`;
 
   const systemPrompt = `Je bent de redacteur van Jasper's persoonlijke nieuwsfeed.
 
@@ -336,7 +345,12 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   const pref = await fetchPreferenceContext();
   const score = (c: Candidate) => {
     const cat = String(c.category ?? "overig").toLowerCase();
-    return (pref.preferredSources.has(c.source) ? 2 : 0) + (pref.preferredTopics.has(cat) ? 2 : 0);
+    return (
+      (pref.preferredSources.has(c.source) ? 2 : 0) +
+      (pref.preferredTopics.has(cat) ? 2 : 0) -
+      (pref.dislikedSources.has(c.source) ? 3 : 0) -
+      (pref.dislikedTopics.has(cat) ? 3 : 0)
+    );
   };
 
   candidates.sort((a, b) => score(b) - score(a));
@@ -378,6 +392,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     seed: seed || null,
     preferred_sources: [...pref.preferredSources],
     preferred_topics: [...pref.preferredTopics],
+    disliked_sources: [...pref.dislikedSources],
+    disliked_topics: [...pref.dislikedTopics],
   }));
 
   await db

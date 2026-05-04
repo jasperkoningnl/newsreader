@@ -50,3 +50,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Failed to save like" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const unauthorized = requireSameOrigin(req);
+  if (unauthorized) return unauthorized;
+  try {
+    const { id } = await params;
+    const articleId = parseInt(id, 10);
+    if (!Number.isInteger(articleId) || articleId <= 0) {
+      return NextResponse.json({ error: "Invalid article id" }, { status: 400 });
+    }
+    await db.delete(article_likes).where(eq(article_likes.article_id, articleId));
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("DELETE /api/articles/[id]/like:", error);
+    return NextResponse.json({ error: "Failed to clear like" }, { status: 500 });
+  }
+}

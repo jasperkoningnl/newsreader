@@ -18,7 +18,9 @@ function RefreshButton() {
     setState("busy");
     let totalOk = 0;
     let totalFailed = 0;
+    let totalDisabled = 0;
     const failures: { source: string; error: string }[] = [];
+    const autoDisabled: string[] = [];
 
     try {
       // Fetch first batch to discover total
@@ -30,7 +32,9 @@ function RefreshButton() {
       const total: number = firstData.total;
       totalOk += firstData.fetched_sources;
       totalFailed += firstData.failed_sources;
+      totalDisabled += firstData.auto_disabled_sources ?? 0;
       failures.push(...(firstData.failures ?? []));
+      autoDisabled.push(...(firstData.auto_disabled ?? []));
 
       const batches = Math.ceil(total / BATCH_SIZE);
 
@@ -42,7 +46,9 @@ function RefreshButton() {
         if (!res.ok) throw new Error(data.error ?? "Failed to fetch feeds");
         totalOk += data.fetched_sources;
         totalFailed += data.failed_sources;
+        totalDisabled += data.auto_disabled_sources ?? 0;
         failures.push(...(data.failures ?? []));
+        autoDisabled.push(...(data.auto_disabled ?? []));
       }
 
       setStatus("Generating edition…");
@@ -53,7 +59,10 @@ function RefreshButton() {
       const failureNote = failures.length
         ? ` — ${failures.length} failed: ${failures.map((f) => f.source).join(", ")}`
         : "";
-      setStatus(`${genData.count} items · ${totalOk} feeds ok · ${totalFailed} failed${failureNote}`);
+      const disabledNote = totalDisabled
+        ? ` · ${totalDisabled} auto-disabled${autoDisabled.length ? `: ${autoDisabled.join(", ")}` : ""}`
+        : "";
+      setStatus(`${genData.count} items · ${totalOk} feeds ok · ${totalFailed} failed${failureNote}${disabledNote}`);
       setState("idle");
       router.refresh();
     } catch (e) {
@@ -90,6 +99,7 @@ function RefreshButton() {
 function Card({ item, index }: { item: EditionItem; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
   const [liked, setLiked] = useState(item.liked);
+  const [disliked, setDisliked] = useState(item.disliked);
   const [liking, setLiking] = useState(false);
   const [saved, setSaved] = useState(() => {
     const savedItems = readSavedArticles();
@@ -127,15 +137,47 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
     e.preventDefault();
     e.stopPropagation();
     if (liking) return;
-    const nextLiked = !liked;
     setLiking(true);
     try {
-      const res = await fetch(`/api/articles/${item.id}/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ liked: nextLiked }),
-      });
-      if (res.ok) setLiked(nextLiked);
+      if (liked) {
+        const res = await fetch(`/api/articles/${item.id}/like`, { method: "DELETE" });
+        if (res.ok) setLiked(false);
+      } else {
+        const res = await fetch(`/api/articles/${item.id}/like`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ liked: true }),
+        });
+        if (res.ok) {
+          setLiked(true);
+          setDisliked(false);
+        }
+      }
+    } finally {
+      setLiking(false);
+    }
+  };
+
+  const handleDislike = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (liking) return;
+    setLiking(true);
+    try {
+      if (disliked) {
+        const res = await fetch(`/api/articles/${item.id}/like`, { method: "DELETE" });
+        if (res.ok) setDisliked(false);
+      } else {
+        const res = await fetch(`/api/articles/${item.id}/like`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ liked: false }),
+        });
+        if (res.ok) {
+          setDisliked(true);
+          setLiked(false);
+        }
+      }
     } finally {
       setLiking(false);
     }
@@ -227,7 +269,16 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
               disabled={liking}
               className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10 disabled:opacity-60"
             >
-              {liked ? "♥" : liking ? "…" : "♡"}
+              {liked ? "♥" : liking && !disliked ? "…" : "♡"}
+            </button>
+            <button
+              type="button"
+              aria-label={disliked ? "Remove dislike" : "Less like this"}
+              onClick={handleDislike}
+              disabled={liking}
+              className="touch-active rounded-full border border-white/30 px-2.5 py-2 text-sm leading-none text-white/80 hover:bg-white/10 disabled:opacity-60"
+            >
+              {disliked ? "✕" : liking && !liked ? "…" : "−"}
             </button>
           </div>
         </div>
