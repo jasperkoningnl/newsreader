@@ -9,11 +9,22 @@ import {
 } from "./api/edition/today/route";
 import FeedCards from "./feed-cards";
 import FeedLoader from "./feed-loader";
-import EditionStrip from "./edition-strip";
 
 export const dynamic = "force-dynamic";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function neighbours(dates: string[], activeDate: string) {
+  const idx = dates.indexOf(activeDate);
+  if (idx === -1) {
+    const older = dates.find((d) => d < activeDate) ?? null;
+    return { newerDate: null, olderDate: older };
+  }
+  return {
+    newerDate: idx > 0 ? dates[idx - 1] : null,
+    olderDate: idx < dates.length - 1 ? dates[idx + 1] : null,
+  };
+}
 
 export default async function FeedPage({
   searchParams,
@@ -25,29 +36,30 @@ export default async function FeedPage({
 
   if (date && DATE_RE.test(date)) {
     const archived = await getEditionByDate(date).catch(() => null);
+    const { newerDate, olderDate } = neighbours(dates, date);
     if (!archived) {
       return (
-        <div className="relative h-full">
-          <EditionStrip dates={dates} activeDate={date} />
-          <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-            <div className="mb-6 text-5xl">📰</div>
-            <h2 className="mb-2 text-2xl font-bold">No edition for this day</h2>
-            <p className="text-sm text-white/40">{date}</p>
-            <Link
-              href="/"
-              className="mt-6 rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
-            >
-              Back to today
-            </Link>
-          </div>
+        <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+          <div className="mb-6 text-5xl">📰</div>
+          <h2 className="mb-2 text-2xl font-bold">No edition for this day</h2>
+          <p className="text-sm text-white/40">{date}</p>
+          <Link
+            href="/"
+            className="mt-6 rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
+          >
+            Back to today
+          </Link>
         </div>
       );
     }
     return (
-      <div className="relative h-full">
-        <EditionStrip dates={dates} activeDate={date} />
-        <FeedCards items={archived.items} createdAt={archived.created_at} archived />
-      </div>
+      <FeedCards
+        items={archived.items}
+        createdAt={archived.created_at}
+        archived
+        olderDate={olderDate}
+        newerDate={newerDate}
+      />
     );
   }
 
@@ -74,10 +86,12 @@ export default async function FeedPage({
   }
 
   const activeDate = (editionData.created_at ?? "").slice(0, 10);
+  const { olderDate } = neighbours(dates, activeDate);
   return (
-    <div className="relative h-full">
-      <EditionStrip dates={dates} activeDate={activeDate} />
-      <FeedCards items={editionData.items} createdAt={editionData.created_at} />
-    </div>
+    <FeedCards
+      items={editionData.items}
+      createdAt={editionData.created_at}
+      olderDate={olderDate}
+    />
   );
 }
