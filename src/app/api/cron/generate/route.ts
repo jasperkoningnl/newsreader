@@ -1,4 +1,7 @@
 import { generateEdition } from "@/lib/generate-edition";
+import { db } from "@/db";
+import { editions } from "@/db/schema";
+import { desc } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
@@ -14,6 +17,20 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [latest] = await db
+      .select()
+      .from(editions)
+      .orderBy(desc(editions.created_at))
+      .limit(1);
+
+    if (latest && new Date(latest.created_at ?? 0) >= todayStart) {
+      console.log(`[cron/generate] skipped: editie ${latest.id} bestaat al voor vandaag`);
+      return NextResponse.json({ skipped: true, edition_id: latest.id });
+    }
+
     const result = await generateEdition();
     console.log(`[cron/generate] Editie ${result.edition_id} gegenereerd met ${result.count} items`);
     return NextResponse.json(result);
