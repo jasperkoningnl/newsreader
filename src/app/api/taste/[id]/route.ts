@@ -2,10 +2,10 @@ import { db } from "@/db";
 import { taste_entries } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiToken } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/lib/api-auth";
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const unauthorized = requireApiToken(_req);
+  const unauthorized = requireSameOrigin(_req);
   if (unauthorized) return unauthorized;
   try {
     const { id } = await params;

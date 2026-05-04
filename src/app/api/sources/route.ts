@@ -1,10 +1,10 @@
 import { db } from "@/db";
 import { sources } from "@/db/schema";
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiToken } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   try {
     const all = await db.select().from(sources).orderBy(sources.category, sources.name);
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   try {
     const body = await req.json();

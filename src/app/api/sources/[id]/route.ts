@@ -2,13 +2,13 @@ import { db } from "@/db";
 import { sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiToken } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/lib/api-auth";
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   try {
     const { id } = await params;
@@ -48,7 +48,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   try {
     const { id } = await params;

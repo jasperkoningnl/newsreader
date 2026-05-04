@@ -1,11 +1,11 @@
 import { fetchFeedsBatch } from "@/lib/fetch-feeds";
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiToken } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/lib/api-auth";
 
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   const offset = parseInt(req.nextUrl.searchParams.get("offset") ?? "0", 10);
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "20", 10);

@@ -1,9 +1,9 @@
 import { discoverFeedUrl } from "@/lib/feed-discovery";
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiToken } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   const { url } = await req.json();
   if (!url) {

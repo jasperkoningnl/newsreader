@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { taste_entries } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiToken } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/lib/api-auth";
 
 const ALLOWED_TYPES = ["series", "film", "boek", "game", "muziek"] as const;
 type CanonicalType = (typeof ALLOWED_TYPES)[number];
@@ -17,7 +17,7 @@ function normalizeType(raw: unknown): CanonicalType {
 }
 
 export async function GET(req: NextRequest) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   try {
     const all = await db.select().from(taste_entries).orderBy(desc(taste_entries.added_at));
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const unauthorized = requireApiToken(req);
+  const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
   try {
     const body = await req.json();
