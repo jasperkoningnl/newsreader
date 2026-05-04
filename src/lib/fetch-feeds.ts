@@ -1,8 +1,10 @@
 import { db } from "@/db";
 import { articles, sources } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import Parser from "rss-parser";
 import { assertSafePublicUrl } from "./net-safety";
+
+const FAILURE_THRESHOLD = 3;
 
 type RssItem = Parser.Item & {
   mediaContent?: { $?: { url?: string } };
@@ -76,18 +78,53 @@ export type FetchResult = {
   fetched: number;
   skipped: number;
   error: string | null;
+  auto_disabled?: boolean;
 };
+
+async function recordSuccess(sourceId: number) {
+  await db
+    .update(sources)
+    .set({ consecutive_failures: 0, last_failure_at: null, last_failure_reason: null })
+    .where(eq(sources.id, sourceId));
+}
+
+async function recordFailure(sourceId: number, reason: string): Promise<{ auto_disabled: boolean }> {
+  const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+  const truncated = reason.slice(0, 300);
+  await db
+    .update(sources)
+    .set({
+      consecutive_failures: sql`coalesce(${sources.consecutive_failures}, 0) + 1`,
+      last_failure_at: now,
+      last_failure_reason: truncated,
+    })
+    .where(eq(sources.id, sourceId));
+
+  const [row] = await db
+    .select({ failures: sources.consecutive_failures, active: sources.active })
+    .from(sources)
+    .where(eq(sources.id, sourceId))
+    .limit(1);
+
+  if ((row?.failures ?? 0) >= FAILURE_THRESHOLD && row?.active !== 0) {
+    await db.update(sources).set({ active: 0 }).where(eq(sources.id, sourceId));
+    return { auto_disabled: true };
+  }
+  return { auto_disabled: false };
+}
 
 async function fetchOneFeed(source: typeof sources.$inferSelect): Promise<FetchResult> {
   if (!source.feed_url) {
-    return { source: source.name, fetched: 0, skipped: 0, error: "geen feed_url" };
+    const { auto_disabled } = await recordFailure(source.id, "geen feed_url");
+    return { source: source.name, fetched: 0, skipped: 0, error: "geen feed_url", auto_disabled };
   }
 
   try {
     await assertSafePublicUrl(source.feed_url);
   } catch (err) {
     const message = err instanceof Error ? err.message : "feed_url not allowed";
-    return { source: source.name, fetched: 0, skipped: 0, error: message };
+    const { auto_disabled } = await recordFailure(source.id, message);
+    return { source: source.name, fetched: 0, skipped: 0, error: message, auto_disabled };
   }
 
   try {
@@ -116,10 +153,12 @@ async function fetchOneFeed(source: typeof sources.$inferSelect): Promise<FetchR
       if (result.rowsAffected > 0) fetched++; else skipped++;
     }
 
+    await recordSuccess(source.id);
     return { source: source.name, fetched, skipped, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { source: source.name, fetched: 0, skipped: 0, error: message };
+    const { auto_disabled } = await recordFailure(source.id, message);
+    return { source: source.name, fetched: 0, skipped: 0, error: message, auto_disabled };
   }
 }
 

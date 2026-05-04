@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
 
     const ok = results.filter((r) => r.error === null);
     const failed = results.filter((r) => r.error !== null);
+    const autoDisabled = results.filter((r) => r.auto_disabled);
 
     return NextResponse.json({
       total,
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
       limit: lim,
       fetched_sources: ok.length,
       failed_sources: failed.length,
+      auto_disabled_sources: autoDisabled.length,
+      auto_disabled: autoDisabled.map((r) => r.source),
       new_articles: ok.reduce((s, r) => s + r.fetched, 0),
       failures: failed.map((r) => ({ source: r.source, error: r.error })),
       results,

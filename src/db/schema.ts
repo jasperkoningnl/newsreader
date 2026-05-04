@@ -9,6 +9,9 @@ export const sources = sqliteTable("sources", {
   category: text("category"),
   active: integer("active").default(1),
   added_at: text("added_at").default(sql`(datetime('now'))`),
+  consecutive_failures: integer("consecutive_failures").default(0),
+  last_failure_at: text("last_failure_at"),
+  last_failure_reason: text("last_failure_reason"),
 });
 
 export const articles = sqliteTable("articles", {

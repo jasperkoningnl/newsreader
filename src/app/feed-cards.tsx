@@ -18,7 +18,9 @@ function RefreshButton() {
     setState("busy");
     let totalOk = 0;
     let totalFailed = 0;
+    let totalDisabled = 0;
     const failures: { source: string; error: string }[] = [];
+    const autoDisabled: string[] = [];
 
     try {
       // Fetch first batch to discover total
@@ -30,7 +32,9 @@ function RefreshButton() {
       const total: number = firstData.total;
       totalOk += firstData.fetched_sources;
       totalFailed += firstData.failed_sources;
+      totalDisabled += firstData.auto_disabled_sources ?? 0;
       failures.push(...(firstData.failures ?? []));
+      autoDisabled.push(...(firstData.auto_disabled ?? []));
 
       const batches = Math.ceil(total / BATCH_SIZE);
 
@@ -42,7 +46,9 @@ function RefreshButton() {
         if (!res.ok) throw new Error(data.error ?? "Failed to fetch feeds");
         totalOk += data.fetched_sources;
         totalFailed += data.failed_sources;
+        totalDisabled += data.auto_disabled_sources ?? 0;
         failures.push(...(data.failures ?? []));
+        autoDisabled.push(...(data.auto_disabled ?? []));
       }
 
       setStatus("Generating edition…");
@@ -53,7 +59,10 @@ function RefreshButton() {
       const failureNote = failures.length
         ? ` — ${failures.length} failed: ${failures.map((f) => f.source).join(", ")}`
         : "";
-      setStatus(`${genData.count} items · ${totalOk} feeds ok · ${totalFailed} failed${failureNote}`);
+      const disabledNote = totalDisabled
+        ? ` · ${totalDisabled} auto-disabled${autoDisabled.length ? `: ${autoDisabled.join(", ")}` : ""}`
+        : "";
+      setStatus(`${genData.count} items · ${totalOk} feeds ok · ${totalFailed} failed${failureNote}${disabledNote}`);
       setState("idle");
       router.refresh();
     } catch (e) {
@@ -90,6 +99,7 @@ function RefreshButton() {
 function Card({ item, index }: { item: EditionItem; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
   const [liked, setLiked] = useState(item.liked);
+  const [disliked, setDisliked] = useState(item.disliked);
   const [liking, setLiking] = useState(false);
   const [saved, setSaved] = useState(() => {
     const savedItems = readSavedArticles();
@@ -127,15 +137,47 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
     e.preventDefault();
     e.stopPropagation();
     if (liking) return;
-    const nextLiked = !liked;
     setLiking(true);
     try {
-      const res = await fetch(`/api/articles/${item.id}/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ liked: nextLiked }),
-      });
-      if (res.ok) setLiked(nextLiked);
+      if (liked) {
+        const res = await fetch(`/api/articles/${item.id}/like`, { method: "DELETE" });
+        if (res.ok) setLiked(false);
+      } else {
+        const res = await fetch(`/api/articles/${item.id}/like`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ liked: true }),
+        });
+        if (res.ok) {
+          setLiked(true);
+          setDisliked(false);
+        }
+      }
+    } finally {
+      setLiking(false);
+    }
+  };
+
+  const handleDislike = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (liking) return;
+    setLiking(true);
+    try {
+      if (disliked) {
+        const res = await fetch(`/api/articles/${item.id}/like`, { method: "DELETE" });
+        if (res.ok) setDisliked(false);
+      } else {
+        const res = await fetch(`/api/articles/${item.id}/like`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ liked: false }),
+        });
+        if (res.ok) {
+          setDisliked(true);
+          setLiked(false);
+        }
+      }
     } finally {
       setLiking(false);
     }
@@ -225,9 +267,28 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
               aria-label={liked ? "Unlike article" : "Like article"}
               onClick={handleLike}
               disabled={liking}
-              className="touch-active rounded-full border border-white/30 p-2 text-white/80 hover:bg-white/10 disabled:opacity-60"
+              className={`touch-active rounded-full border p-2 hover:bg-white/10 disabled:opacity-60 ${
+                liked ? "border-white bg-white/15 text-white" : "border-white/30 text-white/80"
+              }`}
             >
-              {liked ? "♥" : liking ? "…" : "♡"}
+              <svg className="w-4 h-4" fill={liked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10H9.236a2 2 0 00-1.789 1.106L7 12v8m0 0H4a1 1 0 01-1-1v-7a1 1 0 011-1h3" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label={disliked ? "Remove dislike" : "Less like this"}
+              onClick={handleDislike}
+              disabled={liking}
+              className={`touch-active rounded-full border p-2 hover:bg-white/10 disabled:opacity-60 ${
+                disliked ? "border-white bg-white/15 text-white" : "border-white/30 text-white/80"
+              }`}
+            >
+              <svg className="w-4 h-4" fill={disliked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.737 3h4.017c.163 0 .326.02.485.06L17 4m-7 10v5a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h4.764a2 2 0 001.789-1.106L17 12V4m0 0h3a1 1 0 011 1v7a1 1 0 01-1 1h-3" />
+              </svg>
             </button>
           </div>
         </div>
