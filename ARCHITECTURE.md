@@ -251,11 +251,22 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 
 ## Toekomstige uitbreidingen (niet nu bouwen)
 
+### Korte termijn (volgorde gedreven door afhankelijkheid)
+
+1. **Saved-artikelen verhuizen naar de DB** — vandaag in localStorage (`src/lib/saved-articles.ts`); voorwaarde voor de wekelijkse digest, want server-side moet erbij kunnen.
+2. **Paywall-constraint in de curator** — `sources.is_paywall` (en/of detectie op artikel-niveau), curator deprioriteert of cap't paywalled items zodat de feed niet vol komt te staan met muren.
+3. **Smaak-algoritme consolideren** — `profile.md` (tekst), mix-regels (hardcoded in `generate-edition.ts`) en `taste_entries` (DB) overlappen nu. Trek ze samen tot één tunebare smaakbron, zodat finetunen één plek heeft.
+4. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view. Vereist (1).
+
+### Verder weg
+
 - Gmail API koppeling voor nieuwsbrief-analyse
 - Reddit API koppeling voor profiel-signalen
-- Feedback-loop op feed-items (duimpje omhoog/omlaag)
-- Mix-tuning schuifjes (meer tech, minder sport, etc.)
-- Verrassings-factor instelling (0-100%)
 - Bluesky als signaal-bron
 - Meerdere edities per dag (ochtend/avond)
-- Archief van eerdere edities
+- Reader-mode voor niet-paywalled artikelen (`@mozilla/readability` server-side)
+
+### Gedaan
+
+- ~~Feedback-loop op feed-items (duimpje omhoog/omlaag)~~ — like + dislike via `article_likes`, met curator-boost/penalty.
+- ~~Archief van eerdere edities~~ — `?date=YYYY-MM-DD` met "Previous edition"-link op de EndCard.
