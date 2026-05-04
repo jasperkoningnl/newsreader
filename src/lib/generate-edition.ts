@@ -77,18 +77,14 @@ async function runCurator(candidates: Candidate[], profile: string, tasteContext
     .join("\n\n");
 
   const prefContext = `\nVoorrang op basis van likes (>3):\n- Bronnen: ${[...pref.preferredSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.preferredTopics].join(", ") || "geen"}\n`;
-  const msg = await client.messages.create({
-    model: "claude-haiku-4-5",
-    max_tokens: 1500,
-    messages: [
-      {
-        role: "user",
-        content: `Je bent de redacteur van Jasper's persoonlijke nieuwsfeed.
 
-Hier is Jasper's profiel en smaakvoorkeur:
-${profile}${tasteContext}${prefContext}
+  const systemPrompt = `Je bent de redacteur van Jasper's persoonlijke nieuwsfeed.
 
-Selecteer precies 15 artikelen uit de onderstaande lijst die samen de beste dagelijkse feed vormen.
+Hier is Jasper's profiel:
+${profile}
+
+De gebruiker geeft je een lijst kandidaat-artikelen plus actuele smaak- en voorkeurssignalen.
+Selecteer precies 15 artikelen die samen de beste dagelijkse feed vormen.
 Context: de app publiceert uiteindelijk 10 items. Deze overselectie (15 -> 10)
 wordt bewust gebruikt om na constraint-enforcement een gevarieerdere top-10 over te houden.
 
@@ -108,14 +104,36 @@ GEWENSTE MIX:
 - 1 wetenschap of cultuur
 - 1 verrassing
 
-Kandidaat-artikelen:
-${list}
-
 Antwoord uitsluitend als geldig JSON array (geen markdown, geen tekst erbuiten):
-[{"id": <number>, "motivatie": "<één zin waarom dit item"}, ...]`,
+[{"id": <number>, "motivatie": "<één zin waarom dit item"}, ...]`;
+
+  const msg = await client.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 1500,
+    system: [
+      {
+        type: "text",
+        text: systemPrompt,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [
+      {
+        role: "user",
+        content: `Smaak- en voorkeurscontext:${tasteContext}${prefContext}
+Kandidaat-artikelen:
+${list}`,
       },
     ],
   });
+
+  const usage = msg.usage as { cache_creation_input_tokens?: number; cache_read_input_tokens?: number; input_tokens?: number; output_tokens?: number };
+  console.log("[curator.usage]", JSON.stringify({
+    input_tokens: usage.input_tokens,
+    cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
+    output_tokens: usage.output_tokens,
+  }));
 
   const text = msg.content[0].type === "text" ? msg.content[0].text : "";
   const match = text.match(/\[[\s\S]*\]/);
