@@ -3,6 +3,7 @@
 import type { EditionItem } from "./api/edition/today/route";
 import { useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { readSavedArticles, writeSavedArticles, type SavedArticle } from "@/lib/saved-articles";
 
 type RefreshState = "idle" | "busy" | "error";
@@ -297,7 +298,17 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
   );
 }
 
-function EndCard({ createdAt, archived }: { createdAt: string | null; archived: boolean }) {
+function EndCard({
+  createdAt,
+  archived,
+  olderDate,
+  newerDate,
+}: {
+  createdAt: string | null;
+  archived: boolean;
+  olderDate: string | null;
+  newerDate: string | null;
+}) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = tomorrow.toLocaleDateString("en-US", {
@@ -305,6 +316,8 @@ function EndCard({ createdAt, archived }: { createdAt: string | null; archived: 
     day: "numeric",
     month: "long",
   });
+
+  const linkClass = "text-white/60 underline-offset-4 hover:text-white hover:underline";
 
   return (
     <div className="relative flex flex-col h-full snap-start items-center justify-center px-8 text-center bg-black md:col-span-2 md:h-56 md:rounded-xl md:snap-align-none">
@@ -325,6 +338,27 @@ function EndCard({ createdAt, archived }: { createdAt: string | null; archived: 
           })}
         </p>
       )}
+      {(olderDate || newerDate || archived) && (
+        <p className="mt-3 flex items-center gap-3 text-xs text-white/30">
+          {olderDate ? (
+            <Link href={`/?date=${olderDate}`} className={linkClass}>
+              ← Previous edition
+            </Link>
+          ) : null}
+          {olderDate && (newerDate || archived) ? <span>·</span> : null}
+          {archived ? (
+            newerDate ? (
+              <Link href={`/?date=${newerDate}`} className={linkClass}>
+                Next edition →
+              </Link>
+            ) : (
+              <Link href="/" className={linkClass}>
+                Back to today →
+              </Link>
+            )
+          ) : null}
+        </p>
+      )}
       {!archived && <RefreshButton />}
     </div>
   );
@@ -334,17 +368,26 @@ export default function FeedCards({
   items,
   createdAt,
   archived = false,
+  olderDate = null,
+  newerDate = null,
 }: {
   items: EditionItem[];
   createdAt: string | null;
   archived?: boolean;
+  olderDate?: string | null;
+  newerDate?: string | null;
 }) {
   return (
     <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-6 md:p-6 md:bg-[#141313]">
       {items.map((item, i) => (
         <Card key={item.id} item={item} index={i} />
       ))}
-      <EndCard createdAt={createdAt} archived={archived} />
+      <EndCard
+        createdAt={createdAt}
+        archived={archived}
+        olderDate={olderDate}
+        newerDate={newerDate}
+      />
     </div>
   );
 }
