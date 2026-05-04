@@ -1,7 +1,10 @@
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
+const TOKEN = process.env.ADMIN_API_TOKEN ?? process.env.CRON_SECRET ?? "";
 
 async function j(path: string, init?: RequestInit) {
-  const res = await fetch(`${BASE}${path}`, init);
+  const headers = new Headers(init?.headers);
+  if (TOKEN && !headers.has("authorization")) headers.set("authorization", `Bearer ${TOKEN}`);
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${path} -> ${res.status} ${JSON.stringify(data)}`);
   return data;

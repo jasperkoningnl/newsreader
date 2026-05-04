@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { sources } from "@/db/schema";
 import { NextRequest, NextResponse } from "next/server";
+import { requireInternalToken } from "@/lib/api-auth";
 
 const SEED_SOURCES = [
   // Tech
@@ -45,10 +46,8 @@ const SEED_SOURCES = [
 ];
 
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get("secret");
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauthorized = requireInternalToken(req);
+  if (unauthorized) return unauthorized;
 
   try {
     let inserted = 0;

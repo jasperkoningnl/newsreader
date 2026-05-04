@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { article_likes, articles, editions, sources } from "@/db/schema";
 import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { requireInternalToken } from "@/lib/api-auth";
 
 export const maxDuration = 300;
 import { generateEdition } from "@/lib/generate-edition";
@@ -29,6 +30,10 @@ export type TodayEdition = {
 export async function GET(req: NextRequest) {
   try {
     const force = req.nextUrl.searchParams.get("force") === "true";
+    if (force) {
+      const unauthorized = requireInternalToken(req);
+      if (unauthorized) return unauthorized;
+    }
     const edition = await getOrGenerateToday(force);
     return NextResponse.json(edition);
   } catch (error) {
