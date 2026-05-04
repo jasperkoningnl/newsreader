@@ -3,6 +3,14 @@ import { sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { requireSameOrigin } from "@/lib/api-auth";
+import { assertSafePublicUrl } from "@/lib/net-safety";
+
+function canonicalize(raw: string): string {
+  const u = new URL(raw);
+  u.hostname = u.hostname.toLowerCase();
+  if (u.pathname === "") u.pathname = "/";
+  return u.toString();
+}
 
 export async function PUT(
   req: NextRequest,
@@ -22,10 +30,24 @@ export async function PUT(
 
     const updateData: Partial<typeof sources.$inferInsert> = {};
     if (name !== undefined) updateData.name = name;
-    if (url !== undefined) updateData.url = url;
-    if (feed_url !== undefined) updateData.feed_url = feed_url;
     if (category !== undefined) updateData.category = category;
     if (active !== undefined) updateData.active = active ? 1 : 0;
+
+    try {
+      if (typeof url === "string" && url.length > 0) {
+        await assertSafePublicUrl(url);
+        updateData.url = canonicalize(url);
+      }
+      if (typeof feed_url === "string" && feed_url.length > 0) {
+        await assertSafePublicUrl(feed_url);
+        updateData.feed_url = canonicalize(feed_url);
+      } else if (feed_url === null) {
+        updateData.feed_url = null;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Invalid URL";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
 
     const [updated] = await db
       .update(sources)
