@@ -49,6 +49,10 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&([a-zA-Z]+);/g, (whole, name) => NAMED_ENTITIES[name] ?? whole);
 }
 
+function cleanText(str: string): string {
+  return decodeHtmlEntities(str).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
 function extractImageUrl(item: RssItem): string | null {
   if (item.mediaContent?.$?.url) return item.mediaContent.$.url;
   if (item.mediaThumbnail?.$?.url) return item.mediaThumbnail.$.url;
@@ -98,10 +102,10 @@ async function fetchOneFeed(source: typeof sources.$inferSelect): Promise<FetchR
         .insert(articles)
         .values({
           source_id: source.id,
-          title: decodeHtmlEntities(item.title),
+          title: cleanText(item.title),
           url: item.link,
           description: item.contentSnippet
-            ? decodeHtmlEntities(item.contentSnippet.slice(0, 500))
+            ? cleanText(item.contentSnippet).slice(0, 500)
             : null,
           image_url: extractImageUrl(item),
           published_at: item.pubDate ?? item.isoDate ?? null,
