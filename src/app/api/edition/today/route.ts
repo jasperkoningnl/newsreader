@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { article_likes, articles, editions, sources } from "@/db/schema";
+import { requireInternalToken } from "@/lib/api-auth";
 import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -29,6 +30,10 @@ export type TodayEdition = {
 export async function GET(req: NextRequest) {
   try {
     const force = req.nextUrl.searchParams.get("force") === "true";
+    if (force) {
+      const unauthorized = requireInternalToken(req);
+      if (unauthorized) return unauthorized;
+    }
     const edition = await getOrGenerateToday(force);
     return NextResponse.json(edition);
   } catch (error) {
@@ -83,7 +88,12 @@ export async function getOrGenerateToday(force = false): Promise<TodayEdition> {
 }
 
 async function buildEdition(edition: typeof editions.$inferSelect): Promise<TodayEdition> {
-  const parsed: { id: number; motivatie: string }[] = JSON.parse(edition.items_json);
+  let parsed: { id: number; motivatie: string }[] = [];
+  try {
+    parsed = JSON.parse(edition.items_json);
+  } catch {
+    console.warn("[edition.buildEdition] items_json parse failed", { edition_id: edition.id });
+  }
   const ids = parsed.map((p) => p.id);
 
   const rows = await db

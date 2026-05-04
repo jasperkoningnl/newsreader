@@ -20,7 +20,6 @@ type Candidate = {
 type CuratorItem = { id: number; motivatie: string };
 
 const SOURCE_LIMIT = 2;
-const NL_SOURCES = new Set(["NOS Nieuws", "NRC", "Follow the Money"]);
 const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "ontwikkelt", "update"];
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
 const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur"]);
@@ -50,6 +49,11 @@ async function fetchPreferenceContext(): Promise<PreferenceContext> {
     preferredSources: new Set(Object.entries(sourceCounts).filter(([, n]) => n > 3).map(([k]) => k)),
     preferredTopics: new Set(Object.entries(topicCounts).filter(([, n]) => n > 3).map(([k]) => k)),
   };
+}
+
+async function fetchNlSourceNames(): Promise<Set<string>> {
+  const rows = await db.select({ name: sources.name }).from(sources).where(eq(sources.is_nl, 1));
+  return new Set(rows.map((r) => r.name));
 }
 
 async function fetchTasteContext(): Promise<string> {
@@ -95,7 +99,7 @@ wordt bewust gebruikt om na constraint-enforcement een gevarieerdere top-10 over
 HARDE REGELS (verplicht, geen uitzonderingen):
 - Maximaal ${SOURCE_LIMIT} items van dezelfde bron (bijv. max ${SOURCE_LIMIT} van "The Verge")
 - Maximaal 3 items uit dezelfde categorie
-- Altijd minstens 1 Nederlandstalig item (bron: NOS Nieuws, NRC, of Follow the Money)
+- Altijd minstens 1 Nederlandstalig item (bron: een als NL gemarkeerde bron)
 - Minstens 1 longread (schat in op basis van titel/beschrijving)
 - Maximaal 2 breaking-news items; de rest moet een dag later nog leesbaar zijn
 - 1 verrassingsitem buiten de verwachte interesses (serendipity)
@@ -143,15 +147,15 @@ function isSurprise(item: Candidate): boolean {
   return !EXPECTED_CATEGORIES.has(cat);
 }
 
-function meetsGlobalRules(items: Candidate[]): boolean {
-  const hasNl = items.some((i) => NL_SOURCES.has(i.source));
+function meetsGlobalRules(items: Candidate[], nlNames: Set<string>): boolean {
+  const hasNl = items.some((i) => nlNames.has(i.source));
   const hasLongread = items.some(isLongread);
   const breakingCount = items.filter(isBreaking).length;
   const hasSurprise = items.some(isSurprise);
   return hasNl && hasLongread && breakingCount <= 2 && hasSurprise;
 }
 
-function getConstraintViolations(items: Candidate[]): string[] {
+function getConstraintViolations(items: Candidate[], nlNames: Set<string>): string[] {
   const violations: string[] = [];
   const sourceCounts = items.reduce<Record<string, number>>((acc, i) => {
     acc[i.source] = (acc[i.source] ?? 0) + 1;
@@ -163,7 +167,7 @@ function getConstraintViolations(items: Candidate[]): string[] {
     return acc;
   }, {});
 
-  if (!items.some((i) => NL_SOURCES.has(i.source))) violations.push("missing_nl_item");
+  if (!items.some((i) => nlNames.has(i.source))) violations.push("missing_nl_item");
   if (!items.some(isLongread)) violations.push("missing_longread");
   if (!items.some(isSurprise)) violations.push("missing_surprise");
   if (items.filter(isBreaking).length > 2) violations.push("too_many_breaking");
@@ -172,7 +176,7 @@ function getConstraintViolations(items: Candidate[]): string[] {
   return violations;
 }
 
-function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): { items: CuratorItem[]; violations: string[] } {
+function enforceConstraints(selected: CuratorItem[], candidates: Candidate[], nlNames: Set<string>): { items: CuratorItem[]; violations: string[] } {
   const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const curatedById = Object.fromEntries(selected.map((s) => [s.id, s]));
 
@@ -216,8 +220,8 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): {
   const asCandidates = () => result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
   let current = asCandidates();
 
-  if (!current.some((i) => NL_SOURCES.has(i.source))) {
-    const nl = available.find((c) => NL_SOURCES.has(c.source));
+  if (!current.some((i) => nlNames.has(i.source))) {
+    const nl = available.find((c) => nlNames.has(c.source));
     if (nl && result.length < EDITION_SIZE) add(nl);
   }
   current = asCandidates();
@@ -232,8 +236,8 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): {
   }
 
   current = asCandidates();
-  const violations = getConstraintViolations(current);
-  if (violations.length > 0 || !meetsGlobalRules(current)) {
+  const violations = getConstraintViolations(current, nlNames);
+  if (violations.length > 0 || !meetsGlobalRules(current, nlNames)) {
     console.warn("[edition.constraints] not_fully_satisfied", { violations });
   }
 
@@ -283,7 +287,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
       countPerSource[a.source] = n + 1;
     }
   }
-  const pref = await fetchPreferenceContext();
+  const [pref, nlNames] = await Promise.all([fetchPreferenceContext(), fetchNlSourceNames()]);
   const score = (c: Candidate) => {
     const cat = String(c.category ?? "overig").toLowerCase();
     return (pref.preferredSources.has(c.source) ? 2 : 0) + (pref.preferredTopics.has(cat) ? 2 : 0);
@@ -313,7 +317,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
   const tasteContext = await fetchTasteContext();
   const raw = await runCurator(candidates, profile, tasteContext, pref);
-  const constrained = enforceConstraints(raw, candidates);
+  const constrained = enforceConstraints(raw, candidates, nlNames);
   const selected = constrained.items.slice(0, EDITION_SIZE);
 
   if (!selected.length) throw new Error("Curator selecteerde geen artikelen na constraints");

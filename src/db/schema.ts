@@ -8,6 +8,7 @@ export const sources = sqliteTable("sources", {
   feed_url: text("feed_url"),
   category: text("category"),
   active: integer("active").default(1),
+  is_nl: integer("is_nl").default(0),
   added_at: text("added_at").default(sql`(datetime('now'))`),
 });
 

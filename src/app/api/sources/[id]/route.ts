@@ -18,7 +18,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { name, url, feed_url, category, active } = body;
+    const { name, url, feed_url, category, active, is_nl } = body;
 
     const updateData: Partial<typeof sources.$inferInsert> = {};
     if (name !== undefined) updateData.name = name;
@@ -26,6 +26,7 @@ export async function PUT(
     if (feed_url !== undefined) updateData.feed_url = feed_url;
     if (category !== undefined) updateData.category = category;
     if (active !== undefined) updateData.active = active ? 1 : 0;
+    if (is_nl !== undefined) updateData.is_nl = is_nl ? 1 : 0;
 
     const [updated] = await db
       .update(sources)
