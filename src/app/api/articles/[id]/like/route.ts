@@ -2,8 +2,11 @@ import { db } from "@/db";
 import { article_likes, articles, sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { requireSameOrigin } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const unauthorized = requireSameOrigin(req);
+  if (unauthorized) return unauthorized;
   try {
     const { id } = await params;
     const articleId = parseInt(id, 10);
