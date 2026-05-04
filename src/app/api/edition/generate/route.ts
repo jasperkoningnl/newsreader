@@ -1,9 +1,12 @@
 import { generateEdition } from "@/lib/generate-edition";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireSameOriginOrInternalToken } from "@/lib/api-auth";
 
 export const maxDuration = 60;
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const unauthorized = requireSameOriginOrInternalToken(req);
+  if (unauthorized) return unauthorized;
   try {
     const result = await generateEdition();
     return NextResponse.json(result);

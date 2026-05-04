@@ -1,14 +1,23 @@
 import { fetchFeedsBatch } from "@/lib/fetch-feeds";
 import { NextRequest, NextResponse } from "next/server";
 import { requireSameOrigin } from "@/lib/api-auth";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const unauthorized = requireSameOrigin(req);
   if (unauthorized) return unauthorized;
+  if (isRateLimited(req, "fetch-feeds", 5, 60_000)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const offset = parseInt(req.nextUrl.searchParams.get("offset") ?? "0", 10);
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "20", 10);
+
+  if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+    return NextResponse.json({ error: "Invalid pagination" }, { status: 400 });
+  }
 
   try {
     const { results, total, offset: off, limit: lim } = await fetchFeedsBatch(offset, limit);

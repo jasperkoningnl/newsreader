@@ -2,13 +2,14 @@ import { db } from "@/db";
 import { articles } from "@/db/schema";
 import { fetchAllFeeds } from "@/lib/fetch-feeds";
 import { generateEdition } from "@/lib/generate-edition";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireInternalToken } from "@/lib/api-auth";
 
 export const maxDuration = 300;
 
-// Onbeveiligd — alleen bedoeld voor handmatig testen.
-// De dagelijkse productie-pipeline loopt via /api/cron/* (beveiligd).
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const unauthorized = requireInternalToken(req);
+  if (unauthorized) return unauthorized;
   try {
     await db.update(articles).set({ read: 0 });
     const feedResults = await fetchAllFeeds();
