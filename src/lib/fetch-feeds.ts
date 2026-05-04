@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { articles, sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import Parser from "rss-parser";
+import { assertSafePublicUrl } from "./net-safety";
 
 type RssItem = Parser.Item & {
   mediaContent?: { $?: { url?: string } };
@@ -61,6 +62,13 @@ export type FetchResult = {
 async function fetchOneFeed(source: typeof sources.$inferSelect): Promise<FetchResult> {
   if (!source.feed_url) {
     return { source: source.name, fetched: 0, skipped: 0, error: "geen feed_url" };
+  }
+
+  try {
+    await assertSafePublicUrl(source.feed_url);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "feed_url not allowed";
+    return { source: source.name, fetched: 0, skipped: 0, error: message };
   }
 
   try {
