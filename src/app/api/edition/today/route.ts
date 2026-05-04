@@ -130,3 +130,26 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
 
   return { id: edition.id, created_at: edition.created_at, items };
 }
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function getEditionByDate(dateStr: string): Promise<TodayEdition | null> {
+  if (!DATE_RE.test(dateStr)) return null;
+  const [edition] = await db
+    .select()
+    .from(editions)
+    .where(sql`date(${editions.created_at}) = ${dateStr}`)
+    .orderBy(desc(editions.created_at))
+    .limit(1);
+  if (!edition) return null;
+  return buildEdition(edition);
+}
+
+export async function listEditionDates(limit = 30): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ date: sql<string>`date(${editions.created_at})` })
+    .from(editions)
+    .orderBy(desc(sql`date(${editions.created_at})`))
+    .limit(limit);
+  return rows.map((r) => r.date).filter(Boolean);
+}

@@ -297,7 +297,7 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
   );
 }
 
-function EndCard({ createdAt }: { createdAt: string | null }) {
+function EndCard({ createdAt, archived }: { createdAt: string | null; archived: boolean }) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = tomorrow.toLocaleDateString("en-US", {
@@ -308,11 +308,13 @@ function EndCard({ createdAt }: { createdAt: string | null }) {
 
   return (
     <div className="relative flex flex-col h-full snap-start items-center justify-center px-8 text-center bg-black md:col-span-2 md:h-56 md:rounded-xl md:snap-align-none">
-      <div className="text-5xl mb-6">🌿</div>
-      <h2 className="text-2xl font-bold mb-2">That’s it for today</h2>
-      <p className="text-white/40 text-sm">
-        Next edition {tomorrowStr}
-      </p>
+      <div className="text-5xl mb-6">{archived ? "📰" : "🌿"}</div>
+      <h2 className="text-2xl font-bold mb-2">
+        {archived ? "End of this edition" : "That’s it for today"}
+      </h2>
+      {!archived && (
+        <p className="text-white/40 text-sm">Next edition {tomorrowStr}</p>
+      )}
       {createdAt && (
         <p className="mt-6 text-xs text-white/20">
           Edition from{" "}
@@ -323,7 +325,7 @@ function EndCard({ createdAt }: { createdAt: string | null }) {
           })}
         </p>
       )}
-      <RefreshButton />
+      {!archived && <RefreshButton />}
     </div>
   );
 }
@@ -331,16 +333,18 @@ function EndCard({ createdAt }: { createdAt: string | null }) {
 export default function FeedCards({
   items,
   createdAt,
+  archived = false,
 }: {
   items: EditionItem[];
   createdAt: string | null;
+  archived?: boolean;
 }) {
   return (
     <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-6 md:p-6 md:bg-[#141313]">
       {items.map((item, i) => (
         <Card key={item.id} item={item} index={i} />
       ))}
-      <EndCard createdAt={createdAt} />
+      <EndCard createdAt={createdAt} archived={archived} />
     </div>
   );
 }
