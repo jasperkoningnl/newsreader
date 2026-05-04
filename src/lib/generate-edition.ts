@@ -20,10 +20,10 @@ type Candidate = {
 type CuratorItem = { id: number; motivatie: string };
 
 const SOURCE_LIMIT = 2;
-const NL_SOURCES = new Set(["NOS Nieuws", "NRC", "Follow the Money"]);
+const NL_CATEGORY = "local";
 const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "ontwikkelt", "update"];
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
-const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur"]);
+const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur", "local"]);
 
 type PreferenceContext = {
   preferredSources: Set<string>;
@@ -95,7 +95,7 @@ wordt bewust gebruikt om na constraint-enforcement een gevarieerdere top-10 over
 HARDE REGELS (verplicht, geen uitzonderingen):
 - Maximaal ${SOURCE_LIMIT} items van dezelfde bron (bijv. max ${SOURCE_LIMIT} van "The Verge")
 - Maximaal 3 items uit dezelfde categorie
-- Altijd minstens 1 Nederlandstalig item (bron: NOS Nieuws, NRC, of Follow the Money)
+- Altijd minstens 1 Nederlandstalig item (categorie: local)
 - Minstens 1 longread (schat in op basis van titel/beschrijving)
 - Maximaal 2 breaking-news items; de rest moet een dag later nog leesbaar zijn
 - 1 verrassingsitem buiten de verwachte interesses (serendipity)
@@ -143,8 +143,12 @@ function isSurprise(item: Candidate): boolean {
   return !EXPECTED_CATEGORIES.has(cat);
 }
 
+function isLocal(item: Candidate): boolean {
+  return (item.category ?? "").toLowerCase() === NL_CATEGORY;
+}
+
 function meetsGlobalRules(items: Candidate[]): boolean {
-  const hasNl = items.some((i) => NL_SOURCES.has(i.source));
+  const hasNl = items.some(isLocal);
   const hasLongread = items.some(isLongread);
   const breakingCount = items.filter(isBreaking).length;
   const hasSurprise = items.some(isSurprise);
@@ -163,7 +167,7 @@ function getConstraintViolations(items: Candidate[]): string[] {
     return acc;
   }, {});
 
-  if (!items.some((i) => NL_SOURCES.has(i.source))) violations.push("missing_nl_item");
+  if (!items.some(isLocal)) violations.push("missing_nl_item");
   if (!items.some(isLongread)) violations.push("missing_longread");
   if (!items.some(isSurprise)) violations.push("missing_surprise");
   if (items.filter(isBreaking).length > 2) violations.push("too_many_breaking");
@@ -212,28 +216,56 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): {
     if (canAdd(c, currentCandidates)) add(c);
   }
 
-  // Repair pass: ensure global rules by targeted additions/replacements.
   const asCandidates = () => result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
-  let current = asCandidates();
 
-  if (!current.some((i) => NL_SOURCES.has(i.source))) {
-    const nl = available.find((c) => NL_SOURCES.has(c.source));
-    if (nl && result.length < EDITION_SIZE) add(nl);
-  }
-  current = asCandidates();
-  if (!current.some(isLongread)) {
-    const longread = available.find(isLongread);
-    if (longread && result.length < EDITION_SIZE) add(longread);
-  }
-  current = asCandidates();
-  if (!current.some(isSurprise)) {
-    const surprise = available.find(isSurprise);
-    if (surprise && result.length < EDITION_SIZE) add(surprise);
-  }
+  const ensureRule = (predicate: (c: Candidate) => boolean, motivatie: string) => {
+    const before = asCandidates();
+    if (before.some(predicate)) return;
 
-  current = asCandidates();
-  const violations = getConstraintViolations(current);
-  if (violations.length > 0 || !meetsGlobalRules(current)) {
+    const newItem = candidates.find((c) => predicate(c) && !result.some((r) => r.id === c.id));
+    if (!newItem) return;
+
+    if (result.length < EDITION_SIZE && canAdd(newItem, before)) {
+      add(newItem);
+      return;
+    }
+
+    const protect: Array<(items: Candidate[]) => boolean> = [];
+    if (predicate !== isLocal && before.some(isLocal)) protect.push((it) => it.some(isLocal));
+    if (predicate !== isLongread && before.some(isLongread)) protect.push((it) => it.some(isLongread));
+    if (predicate !== isSurprise && before.some(isSurprise)) protect.push((it) => it.some(isSurprise));
+
+    for (let i = 0; i < result.length; i++) {
+      const removed = byId[result[i].id];
+      if (!removed) continue;
+      const without = before.filter((_, idx) => idx !== i);
+      const withNew = [...without, newItem];
+
+      if (!protect.every((rule) => rule(withNew))) continue;
+
+      const newCat = (newItem.category ?? "overig").toLowerCase();
+      const okSource = withNew.filter((c) => c.source === newItem.source).length <= SOURCE_LIMIT;
+      const okCat = withNew.filter((c) => (c.category ?? "overig").toLowerCase() === newCat).length <= 3;
+      const okBreaking = withNew.filter(isBreaking).length <= 2;
+      if (!okSource || !okCat || !okBreaking) continue;
+
+      const removedCat = (removed.category ?? "overig").toLowerCase();
+      sourceCounts[removed.source] = (sourceCounts[removed.source] ?? 0) - 1;
+      categoryCounts[removedCat] = (categoryCounts[removedCat] ?? 0) - 1;
+      sourceCounts[newItem.source] = (sourceCounts[newItem.source] ?? 0) + 1;
+      categoryCounts[newCat] = (categoryCounts[newCat] ?? 0) + 1;
+      result[i] = curatedById[newItem.id] ?? { id: newItem.id, motivatie };
+      return;
+    }
+  };
+
+  ensureRule(isLocal, "Toegevoegd voor NL-item (categorie local).");
+  ensureRule(isLongread, "Toegevoegd om aan de longread-regel te voldoen.");
+  ensureRule(isSurprise, "Toegevoegd als verrassingsitem buiten de verwachte categorieën.");
+
+  const final = asCandidates();
+  const violations = getConstraintViolations(final);
+  if (violations.length > 0 || !meetsGlobalRules(final)) {
     console.warn("[edition.constraints] not_fully_satisfied", { violations });
   }
 
