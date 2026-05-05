@@ -218,6 +218,15 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
       )}
 
       <div className="absolute inset-0 story-scrim" />
+      {item.is_paywall && (
+        <span
+          aria-label="Behind paywall"
+          title="Behind paywall"
+          className="absolute right-4 top-4 md:right-6 md:top-6 flex h-8 w-8 items-center justify-center rounded-full border border-white/30 bg-black/40 text-sm font-semibold text-white backdrop-blur-sm"
+        >
+          €
+        </span>
+      )}
       {/* content */}
       <div className="relative mt-auto px-5 pb-5 md:px-8 md:pb-8">
         <div className="flex items-center gap-2 mb-2">

@@ -8,6 +8,7 @@ export const sources = sqliteTable("sources", {
   feed_url: text("feed_url"),
   category: text("category"),
   active: integer("active").default(1),
+  is_paywall: integer("is_paywall").default(0),
   added_at: text("added_at").default(sql`(datetime('now'))`),
   consecutive_failures: integer("consecutive_failures").default(0),
   last_failure_at: text("last_failure_at"),
@@ -25,6 +26,8 @@ export const articles = sqliteTable("articles", {
   fetched_at: text("fetched_at").default(sql`(datetime('now'))`),
   category: text("category"),
   read: integer("read").default(0),
+  is_paywall: integer("is_paywall"),
+  paywall_checked_at: text("paywall_checked_at"),
 });
 
 export const editions = sqliteTable("editions", {

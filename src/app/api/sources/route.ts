@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (unauthorized) return unauthorized;
   try {
     const body = await req.json();
-    const { url, name, feed_url, category } = body;
+    const { url, name, feed_url, category, is_paywall } = body;
 
     if (!url || !name || typeof url !== "string" || typeof name !== "string") {
       return NextResponse.json({ error: "url and name are required" }, { status: 400 });
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     const [created] = await db
       .insert(sources)
-      .values({ url: safeUrl, name, feed_url: safeFeedUrl, category: category ?? null })
+      .values({ url: safeUrl, name, feed_url: safeFeedUrl, category: category ?? null, is_paywall: is_paywall ? 1 : 0 })
       .returning();
 
     return NextResponse.json(created, { status: 201 });
