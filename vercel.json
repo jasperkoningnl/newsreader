@@ -5,6 +5,10 @@
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/cron/bluesky",
+      "schedule": "0 */6 * * *"
+    },
+    {
       "path": "/api/cron/generate",
       "schedule": "0 6 * * *"
     }
