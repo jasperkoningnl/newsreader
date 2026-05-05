@@ -9,6 +9,10 @@
       "schedule": "30 5 * * *"
     },
     {
+      "path": "/api/cron/reddit",
+      "schedule": "45 5 * * *"
+    },
+    {
       "path": "/api/cron/generate",
       "schedule": "0 6 * * *"
     }
