@@ -253,17 +253,16 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 
 ### Korte termijn (volgorde gedreven door afhankelijkheid)
 
-1. **Saved-artikelen verhuizen naar de DB** — vandaag in localStorage (`src/lib/saved-articles.ts`); voorwaarde voor de wekelijkse digest, want server-side moet erbij kunnen.
-2. **Smaak-algoritme consolideren** — `profile.md` (tekst), mix-regels (hardcoded in `generate-edition.ts`) en `taste_entries` (DB) overlappen nu. Trek ze samen tot één tunebare smaakbron, zodat finetunen één plek heeft.
-3. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view. Vereist (1).
+1. **Smaak-algoritme consolideren** — `profile.md` (tekst), mix-regels (hardcoded in `generate-edition.ts`) en `taste_entries` (DB) overlappen nu. Trek ze samen tot één tunebare smaakbron, zodat finetunen één plek heeft.
+2. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
 
 ### Verder weg
 
-- Gmail API koppeling voor nieuwsbrief-analyse
-- Reddit API koppeling voor profiel-signalen
-- Bluesky als signaal-bron
 - Meerdere edities per dag (ochtend/avond)
-- Reader-mode voor niet-paywalled artikelen (`@mozilla/readability` server-side)
+
+### Niet doen
+
+- ~~Gmail API koppeling voor nieuwsbrief-analyse~~ — nieuwsbrieven komen al via RSS binnen, geen tweede pad nodig.
 
 ### Gedaan
 
@@ -271,3 +270,7 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 - ~~Archief van eerdere edities~~ — `?date=YYYY-MM-DD` met "Previous edition"-link op de EndCard.
 - ~~Paywall-constraint in de curator~~ — `sources.is_paywall`-vlag, € indicator op cards en hard cap van 2 paywalled items per editie in `generate-edition.ts`.
 - ~~Paywall-detectie per artikel~~ — `articles.is_paywall` (nullable) wordt gevuld door `src/lib/paywall-detect.ts` (JSON-LD `isAccessibleForFree`, `<meta property="article:content_tier">`, host-fallbacks). Detectie loopt mee met edition-generatie op de candidate-pool en kan handmatig via `POST /api/paywall-scan` voor backfill. Effectieve waarde = `coalesce(article.is_paywall, source.is_paywall, 0)`.
+- ~~Saved-artikelen verhuizen naar de DB~~ — server-side opslag, voorwaarde voor de wekelijkse digest.
+- ~~Reddit API koppeling voor profiel-signalen~~ — ingest via GitHub Actions (`.github/workflows/reddit-ingest.yml` + `src/lib/ingest-reddit.ts`), gepromoot naar de candidate-pool via `src/lib/promote-signals.ts`.
+- ~~Bluesky als signaal-bron~~ — `src/lib/ingest-bluesky.ts` + `src/lib/bluesky.ts`, zelfde promote-pad als Reddit.
+- ~~Reader-mode voor niet-paywalled artikelen~~ — server-side via `@mozilla/readability` in `src/lib/extract-article.ts`.
