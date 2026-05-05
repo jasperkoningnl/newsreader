@@ -26,12 +26,13 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { name, url, feed_url, category, active } = body;
+    const { name, url, feed_url, category, active, is_paywall } = body;
 
     const updateData: Partial<typeof sources.$inferInsert> = {};
     if (name !== undefined) updateData.name = name;
     if (category !== undefined) updateData.category = category;
     if (active !== undefined) updateData.active = active ? 1 : 0;
+    if (is_paywall !== undefined) updateData.is_paywall = is_paywall ? 1 : 0;
 
     try {
       if (typeof url === "string" && url.length > 0) {

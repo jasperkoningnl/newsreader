@@ -8,6 +8,7 @@ export const sources = sqliteTable("sources", {
   feed_url: text("feed_url"),
   category: text("category"),
   active: integer("active").default(1),
+  is_paywall: integer("is_paywall").default(0),
   added_at: text("added_at").default(sql`(datetime('now'))`),
   consecutive_failures: integer("consecutive_failures").default(0),
   last_failure_at: text("last_failure_at"),
