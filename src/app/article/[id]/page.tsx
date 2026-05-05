@@ -42,11 +42,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
 
   return (
     <article className="mx-auto w-full max-w-3xl px-5 pb-20 pt-8 md:px-10 md:pt-12">
-      <Link href="/" className="metadata-caps text-white/55 transition-colors hover:text-white/90">
+      <Link href="/" className="metadata-caps text-white/70 transition-colors hover:text-white">
         ← Back to feed
       </Link>
 
-      <div className="mt-6 flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
+      <div className="mt-6 flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-white/60">
         <span>{article.source}</span>
         {article.category && (
           <>
@@ -78,13 +78,13 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
       )}
 
       {extracted ? (
-        <section className="mt-8 space-y-6">
+        <section className="mt-8 space-y-7">
           {(extracted.excerpt ?? article.description) && (
-            <p className="text-lg leading-relaxed text-white/78">
+            <p className="text-lg leading-relaxed text-white/85">
               {extracted.excerpt ?? article.description}
             </p>
           )}
-          <div className="space-y-5 text-[1.03rem] leading-8 text-white/82">
+          <div className="max-w-2xl space-y-6 text-[1.08rem] leading-9 text-white/90">
             {extracted.paragraphs.map((paragraph, index) => (
               <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
             ))}
@@ -92,7 +92,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
         </section>
       ) : (
         article.description && (
-          <p className="mt-7 text-lg leading-relaxed text-white/78">{article.description}</p>
+          <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/85">{article.description}</p>
         )
       )}
 
@@ -112,6 +112,15 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
           />
         </svg>
       </a>
+
+      <div className="mt-6">
+        <Link
+          href="/"
+          className="metadata-caps text-white/70 transition-colors hover:text-white"
+        >
+          ← Back to feed
+        </Link>
+      </div>
     </article>
   );
 }
