@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { articles, sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { extractArticleContent } from "@/lib/extract-article";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
     .limit(1);
 
   if (!article) notFound();
+
+  const extracted = await extractArticleContent(article.url).catch(() => null);
 
   const publishedAt = article.published_at
     ? new Date(article.published_at).toLocaleDateString("en-US", {
@@ -74,8 +77,23 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {article.description && (
-        <p className="mt-7 text-lg leading-relaxed text-white/78">{article.description}</p>
+      {extracted ? (
+        <section className="mt-8 space-y-6">
+          {(extracted.excerpt ?? article.description) && (
+            <p className="text-lg leading-relaxed text-white/78">
+              {extracted.excerpt ?? article.description}
+            </p>
+          )}
+          <div className="space-y-5 text-[1.03rem] leading-8 text-white/82">
+            {extracted.paragraphs.map((paragraph, index) => (
+              <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
+            ))}
+          </div>
+        </section>
+      ) : (
+        article.description && (
+          <p className="mt-7 text-lg leading-relaxed text-white/78">{article.description}</p>
+        )
       )}
 
       <a
