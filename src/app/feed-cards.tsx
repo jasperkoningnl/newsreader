@@ -4,7 +4,6 @@ import type { EditionItem } from "./api/edition/today/route";
 import { useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { readSavedArticles, writeSavedArticles, type SavedArticle } from "@/lib/saved-articles";
 
 type RefreshState = "idle" | "busy" | "error";
 
@@ -102,36 +101,22 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
   const [liked, setLiked] = useState(item.liked);
   const [disliked, setDisliked] = useState(item.disliked);
   const [liking, setLiking] = useState(false);
-  const [saved, setSaved] = useState(() => {
-    const savedItems = readSavedArticles();
-    return savedItems.some((savedItem) => savedItem.id === item.id);
-  });
+  const [saved, setSaved] = useState(item.saved);
 
-  const handleSave = (e: MouseEvent<HTMLButtonElement>) => {
+  const handleSave = async (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const savedItems = readSavedArticles();
-    if (saved) {
-      writeSavedArticles(savedItems.filter((savedItem) => savedItem.id !== item.id));
-      setSaved(false);
-      return;
+    const next = !saved;
+    setSaved(next);
+    try {
+      const res = await fetch(`/api/articles/${item.id}/save`, {
+        method: next ? "POST" : "DELETE",
+      });
+      if (!res.ok) setSaved(!next);
+    } catch {
+      setSaved(!next);
     }
-
-    const articleToSave: SavedArticle = {
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      description: item.description,
-      image_url: item.image_url,
-      published_at: item.published_at,
-      category: item.category,
-      source: item.source,
-      saved_at: new Date().toISOString(),
-    };
-
-    writeSavedArticles([articleToSave, ...savedItems.filter((savedItem) => savedItem.id !== item.id)]);
-    setSaved(true);
   };
 
   const handleLike = async (e: MouseEvent<HTMLButtonElement>) => {
