@@ -1,7 +1,4 @@
-const TOKEN_URL = "https://www.reddit.com/api/v1/access_token";
-const API_BASE = "https://oauth.reddit.com";
-
-type Token = { access_token: string; expires_at: number };
+const BASE = "https://www.reddit.com";
 
 export type RedditPost = {
   fullname: string;
@@ -45,52 +42,6 @@ function userAgent(): string {
   return process.env.REDDIT_USER_AGENT ?? "newsreader/1.0";
 }
 
-async function fetchToken(): Promise<Token> {
-  const id = process.env.REDDIT_CLIENT_ID;
-  const secret = process.env.REDDIT_CLIENT_SECRET;
-  const username = process.env.REDDIT_USERNAME;
-  const password = process.env.REDDIT_PASSWORD;
-  if (!id || !secret || !username || !password) {
-    throw new Error("REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD must be set");
-  }
-
-  const body = new URLSearchParams({
-    grant_type: "password",
-    username,
-    password,
-  });
-
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`,
-      "content-type": "application/x-www-form-urlencoded",
-      "user-agent": userAgent(),
-    },
-    body,
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`reddit token ${res.status}: ${text.slice(0, 200)}`);
-  }
-
-  const json = (await res.json()) as { access_token: string; expires_in: number };
-  return {
-    access_token: json.access_token,
-    expires_at: Date.now() + (json.expires_in - 60) * 1000,
-  };
-}
-
-let cached: Token | null = null;
-
-async function getToken(): Promise<string> {
-  if (cached && cached.expires_at > Date.now()) return cached.access_token;
-  cached = await fetchToken();
-  return cached.access_token;
-}
-
 function mapPost(raw: RawPost): RedditPost {
   const previewRaw = raw.preview?.images?.[0]?.source?.url;
   const preview = previewRaw ? previewRaw.replace(/&amp;/g, "&") : null;
@@ -111,17 +62,21 @@ function mapPost(raw: RawPost): RedditPost {
   };
 }
 
-async function listing(path: string, limit: number): Promise<RedditPost[]> {
-  const token = await getToken();
-  const url = new URL(path, API_BASE);
+async function fetchPersonalListing(path: string, limit: number): Promise<RedditPost[]> {
+  const username = process.env.REDDIT_USERNAME;
+  const token = process.env.REDDIT_FEED_TOKEN;
+  if (!username || !token) {
+    throw new Error("REDDIT_USERNAME and REDDIT_FEED_TOKEN must be set");
+  }
+
+  const url = new URL(`/user/${username}/${path}.json`, BASE);
+  url.searchParams.set("feed", token);
+  url.searchParams.set("user", username);
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("raw_json", "1");
 
   const res = await fetch(url, {
-    headers: {
-      authorization: `Bearer ${token}`,
-      "user-agent": userAgent(),
-    },
+    headers: { "user-agent": userAgent() },
     signal: AbortSignal.timeout(15_000),
   });
 
@@ -135,15 +90,9 @@ async function listing(path: string, limit: number): Promise<RedditPost[]> {
 }
 
 export async function getSaved(limit: number): Promise<RedditPost[]> {
-  const username = process.env.REDDIT_USERNAME!;
-  return listing(`/user/${username}/saved`, limit);
+  return fetchPersonalListing("saved", limit);
 }
 
 export async function getUpvoted(limit: number): Promise<RedditPost[]> {
-  const username = process.env.REDDIT_USERNAME!;
-  return listing(`/user/${username}/upvoted`, limit);
-}
-
-export async function getBest(limit: number): Promise<RedditPost[]> {
-  return listing("/best", limit);
+  return fetchPersonalListing("upvoted", limit);
 }

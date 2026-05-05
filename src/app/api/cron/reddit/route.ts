@@ -9,12 +9,7 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 function hasCredentials(): boolean {
-  return Boolean(
-    process.env.REDDIT_CLIENT_ID &&
-      process.env.REDDIT_CLIENT_SECRET &&
-      process.env.REDDIT_USERNAME &&
-      process.env.REDDIT_PASSWORD,
-  );
+  return Boolean(process.env.REDDIT_USERNAME && process.env.REDDIT_FEED_TOKEN);
 }
 
 export async function GET(req: NextRequest) {
@@ -29,7 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     const result = await ingestReddit();
     console.log(
-      `[cron/reddit] saved=${result.saved_seen} upvoted=${result.upvoted_seen} best=${result.best_seen} inserted=${result.inserted} skipped=${result.skipped}`,
+      `[cron/reddit] saved=${result.saved_seen} upvoted=${result.upvoted_seen} inserted=${result.inserted} skipped=${result.skipped}`,
     );
     return NextResponse.json(result);
   } catch (error) {

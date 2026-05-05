@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { link_signals, type NewLinkSignal } from "@/db/schema";
-import { getBest, getSaved, getUpvoted, type RedditPost } from "./reddit";
+import { getSaved, getUpvoted, type RedditPost } from "./reddit";
 import { normalizeUrl } from "./url-normalize";
 
 const SKIP_HOSTS = new Set([
@@ -14,7 +14,6 @@ const SKIP_HOSTS = new Set([
 
 const SAVED_WEIGHT = 1.0;
 const UPVOTED_WEIGHT = 0.7;
-const BEST_WEIGHT = 0.4;
 
 type SignalDraft = NewLinkSignal & { external_id: string };
 
@@ -28,7 +27,7 @@ function safeHost(raw: string): string | null {
 
 function buildSignal(
   post: RedditPost,
-  signal_type: "saved" | "upvoted" | "best",
+  signal_type: "saved" | "upvoted",
   weight: number,
 ): SignalDraft | null {
   if (post.is_self || post.over_18 || !post.url) return null;
@@ -59,7 +58,6 @@ function buildSignal(
 export type IngestResult = {
   saved_seen: number;
   upvoted_seen: number;
-  best_seen: number;
   inserted: number;
   skipped: number;
 };
@@ -67,16 +65,13 @@ export type IngestResult = {
 export async function ingestReddit(opts?: {
   savedLimit?: number;
   upvotedLimit?: number;
-  bestLimit?: number;
 }): Promise<IngestResult> {
   const savedLimit = opts?.savedLimit ?? 50;
   const upvotedLimit = opts?.upvotedLimit ?? 50;
-  const bestLimit = opts?.bestLimit ?? 100;
 
-  const [saved, upvoted, best] = await Promise.all([
+  const [saved, upvoted] = await Promise.all([
     getSaved(savedLimit),
     getUpvoted(upvotedLimit),
-    getBest(bestLimit),
   ]);
 
   const drafts: SignalDraft[] = [];
@@ -87,10 +82,6 @@ export async function ingestReddit(opts?: {
   }
   for (const post of upvoted) {
     const signal = buildSignal(post, "upvoted", UPVOTED_WEIGHT);
-    if (signal) drafts.push(signal);
-  }
-  for (const post of best) {
-    const signal = buildSignal(post, "best", BEST_WEIGHT);
     if (signal) drafts.push(signal);
   }
 
@@ -114,7 +105,6 @@ export async function ingestReddit(opts?: {
   return {
     saved_seen: saved.length,
     upvoted_seen: upvoted.length,
-    best_seen: best.length,
     inserted,
     skipped,
   };
