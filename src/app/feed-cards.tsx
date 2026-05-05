@@ -216,6 +216,15 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
           <span className="text-xs font-medium text-white/50 uppercase tracking-wide">
             {item.source}
           </span>
+          {item.signal_score > 0 && (
+            <span
+              aria-label={`Signaal ${item.signal_score.toFixed(1)}`}
+              title={`Opgepikt uit jouw activiteit (signaal=${item.signal_score.toFixed(1)})`}
+              className="text-xs leading-none"
+            >
+              🔥
+            </span>
+          )}
           {item.category && (
             <>
               <span className="text-white/25">·</span>

@@ -22,6 +22,7 @@ export type EditionItem = {
   disliked: boolean;
   saved: boolean;
   is_paywall: boolean;
+  signal_score: number;
 };
 
 export type TodayEdition = {
@@ -105,6 +106,7 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
       category: articles.category,
       source: sources.name,
       is_paywall: sql<number>`coalesce(${articles.is_paywall}, ${sources.is_paywall}, 0)`,
+      signal_score: articles.signal_score,
       liked: sql<number>`max(case when ${article_likes.liked} = 1 then 1 else 0 end)`,
       disliked: sql<number>`max(case when ${article_likes.liked} = 0 then 1 else 0 end)`,
       saved: sql<number>`max(case when ${saved_articles.id} is not null then 1 else 0 end)`,
@@ -125,13 +127,14 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
       sources.name,
       articles.is_paywall,
       sources.is_paywall,
+      articles.signal_score,
     );
 
   const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
   const items: EditionItem[] = parsed
     .map((p) => {
       const a = byId[p.id];
-      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked), disliked: Boolean(a.disliked), saved: Boolean(a.saved), is_paywall: a.is_paywall === 1 } : null;
+      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked), disliked: Boolean(a.disliked), saved: Boolean(a.saved), is_paywall: a.is_paywall === 1, signal_score: a.signal_score ?? 0 } : null;
     })
     .filter((x): x is EditionItem => x !== null);
 

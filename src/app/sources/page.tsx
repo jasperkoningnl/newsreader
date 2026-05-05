@@ -20,6 +20,8 @@ export default function SourcesPage() {
   const [error, setError] = useState<string | null>(null);
   const [scanState, setScanState] = useState<"idle" | "busy" | "error">("idle");
   const [scanStatus, setScanStatus] = useState<string>("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState<string>("");
   const urlRef = useRef<HTMLInputElement>(null);
 
   const categories = useMemo(() => {
@@ -64,6 +66,26 @@ export default function SourcesPage() {
     } catch (err) {
       setScanStatus(err instanceof Error ? err.message : "Scan failed");
       setScanState("error");
+    }
+  }
+
+  function startRename(source: Source) {
+    setEditingId(source.id);
+    setEditingName(source.name);
+  }
+
+  async function commitRename(source: Source) {
+    const trimmed = editingName.trim();
+    setEditingId(null);
+    if (!trimmed || trimmed === source.name) return;
+    const res = await fetch(`/api/sources/${source.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setSources((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     }
   }
 
@@ -133,7 +155,7 @@ export default function SourcesPage() {
         <p className={`w-full text-xs ${scanState === "error" ? "text-red-400" : "text-white/50"}`}>{scanStatus}</p>
       )}
     </section>
-    <div className="mt-8 grid gap-6 md:grid-cols-2">{Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).map(([cat,items])=><section key={cat} className="rounded-3xl border border-white/10 bg-black/40 overflow-hidden"><div className="border-b border-white/10 p-5"><h2 className="text-4xl font-semibold capitalize tracking-[-0.02em]">{cat}</h2></div><ul className="divide-y divide-white/10">{items.map(source=><li key={source.id} className="flex items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-2xl leading-tight">{source.name}{source.is_paywall === 1 && <span className="rounded-full border border-white/20 px-2 py-0.5 text-xs text-white/70" title="Behind paywall">€</span>}</p><p className="text-white/50">{source.url}</p></div><button type="button" onClick={()=>handlePaywallToggle(source)} className={`h-8 rounded-full border px-3 text-xs ${source.is_paywall===1?"border-white bg-white/10 text-white":"border-white/20 text-white/60"}`} title="Toggle paywall">€</button><button onClick={()=>handleToggle(source)} className={`h-8 w-14 rounded-full border ${source.active?"bg-white border-white":"border-white/20"}`}><span className={`block h-6 w-6 rounded-full bg-black transition-transform ${source.active?"translate-x-6":"translate-x-1"}`} /></button><select value={source.category ?? "other"} onChange={(e)=>handleCategoryChange(source, e.target.value)} className="h-8 rounded-full border border-white/20 bg-transparent px-3 text-xs">{categories.map(c=><option key={c} value={c} className="bg-black">{c}</option>)}</select><button onClick={() => handleDelete(source)} className="rounded-full border border-red-400/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10">Remove</button></li>)}</ul></section>)}</div>
+    <div className="mt-8 grid gap-6 md:grid-cols-2">{Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).map(([cat,items])=><section key={cat} className="rounded-3xl border border-white/10 bg-black/40 overflow-hidden"><div className="border-b border-white/10 p-5"><h2 className="text-4xl font-semibold capitalize tracking-[-0.02em]">{cat}</h2></div><ul className="divide-y divide-white/10">{items.map(source=><li key={source.id} className="flex items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-2xl leading-tight">{editingId === source.id ? (<input autoFocus value={editingName} onChange={(e)=>setEditingName(e.target.value)} onBlur={()=>commitRename(source)} onKeyDown={(e)=>{if(e.key==="Enter"){(e.target as HTMLInputElement).blur();}else if(e.key==="Escape"){setEditingId(null);}}} className="min-w-0 flex-1 border-b border-white/30 bg-transparent text-2xl outline-none" />) : (<button type="button" onClick={()=>startRename(source)} className="text-left hover:text-white/80" title="Click to rename">{source.name}</button>)}{source.is_paywall === 1 && <span className="rounded-full border border-white/20 px-2 py-0.5 text-xs text-white/70" title="Behind paywall">€</span>}</p><p className="text-white/50">{source.url}</p></div><button type="button" onClick={()=>handlePaywallToggle(source)} className={`h-8 rounded-full border px-3 text-xs ${source.is_paywall===1?"border-white bg-white/10 text-white":"border-white/20 text-white/60"}`} title="Toggle paywall">€</button><button onClick={()=>handleToggle(source)} className={`h-8 w-14 rounded-full border ${source.active?"bg-white border-white":"border-white/20"}`}><span className={`block h-6 w-6 rounded-full bg-black transition-transform ${source.active?"translate-x-6":"translate-x-1"}`} /></button><select value={source.category ?? "other"} onChange={(e)=>handleCategoryChange(source, e.target.value)} className="h-8 rounded-full border border-white/20 bg-transparent px-3 text-xs">{categories.map(c=><option key={c} value={c} className="bg-black">{c}</option>)}</select><button onClick={() => handleDelete(source)} className="rounded-full border border-red-400/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10">Remove</button></li>)}</ul></section>)}</div>
     {loading && <p className="mt-6 text-white/50">Loading…</p>}
     {!loading && !sources.length && <p className="mt-6 text-white/50">No sources yet.</p>}
   </div>;
