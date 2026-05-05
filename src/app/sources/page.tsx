@@ -18,6 +18,8 @@ export default function SourcesPage() {
   const [discoverState, setDiscoverState] = useState<DiscoverState>("idle");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanState, setScanState] = useState<"idle" | "busy" | "error">("idle");
+  const [scanStatus, setScanStatus] = useState<string>("");
   const urlRef = useRef<HTMLInputElement>(null);
 
   const categories = useMemo(() => {
@@ -34,6 +36,37 @@ export default function SourcesPage() {
   async function handlePaywallToggle(source: Source) { const res = await fetch(`/api/sources/${source.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_paywall: source.is_paywall === 1 ? 0 : 1 }) }); if (res.ok) { const updated = await res.json(); setSources((prev) => prev.map((s) => (s.id === updated.id ? updated : s))); } }
   async function handleToggle(source: Source) { const res = await fetch(`/api/sources/${source.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: source.active === 0 ? 1 : 0 }) }); if (res.ok) { const updated = await res.json(); setSources((prev) => prev.map((s) => (s.id === updated.id ? updated : s))); } }
   async function handleCategoryChange(source: Source, category: string) { const res = await fetch(`/api/sources/${source.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category }) }); if (res.ok) { const updated = await res.json(); setSources((prev) => prev.map((s) => (s.id === updated.id ? updated : s))); } }
+  async function handleScanPaywalls() {
+    if (scanState === "busy") return;
+    setScanState("busy");
+    let totalChecked = 0;
+    let totalHits = 0;
+    let totalFree = 0;
+    let totalUnknown = 0;
+    try {
+      for (let i = 0; i < 20; i++) {
+        setScanStatus(`Scanning… ${totalChecked} checked`);
+        const res = await fetch("/api/paywall-scan?limit=100", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Scan failed");
+        totalChecked += data.checked ?? 0;
+        totalHits += data.hits ?? 0;
+        totalFree += data.free ?? 0;
+        totalUnknown += data.unknown ?? 0;
+        if (!data.checked || data.remaining === 0) {
+          setScanStatus(`Done · ${totalChecked} checked · ${totalHits} paywalled · ${totalFree} free · ${totalUnknown} unknown`);
+          setScanState("idle");
+          return;
+        }
+      }
+      setScanStatus(`Stopped after 20 batches · ${totalChecked} checked · ${totalHits} paywalled · ${totalFree} free · ${totalUnknown} unknown`);
+      setScanState("idle");
+    } catch (err) {
+      setScanStatus(err instanceof Error ? err.message : "Scan failed");
+      setScanState("error");
+    }
+  }
+
   async function handleDelete(source: Source) {
     const confirmed = window.confirm(`Are you sure you want to remove '${source.name}'?`);
     if (!confirmed) return;
@@ -82,6 +115,23 @@ export default function SourcesPage() {
           <datalist id="categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
         </div>
       </div>
+    </section>
+    <section className="mt-8 flex flex-wrap items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+      <div className="flex-1 min-w-[16rem]">
+        <p className="metadata-caps text-white/70">Paywall scan</p>
+        <p className="mt-1 text-sm text-white/50">Detect per-article paywalls for cached articles where it&apos;s still unknown.</p>
+      </div>
+      <button
+        type="button"
+        onClick={handleScanPaywalls}
+        disabled={scanState === "busy"}
+        className="touch-active h-12 rounded-full border border-white/20 px-6 text-sm hover:bg-white/10 disabled:opacity-50"
+      >
+        {scanState === "busy" ? "Scanning…" : "Scan paywalls"}
+      </button>
+      {scanStatus && (
+        <p className={`w-full text-xs ${scanState === "error" ? "text-red-400" : "text-white/50"}`}>{scanStatus}</p>
+      )}
     </section>
     <div className="mt-8 grid gap-6 md:grid-cols-2">{Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).map(([cat,items])=><section key={cat} className="rounded-3xl border border-white/10 bg-black/40 overflow-hidden"><div className="border-b border-white/10 p-5"><h2 className="text-4xl font-semibold capitalize tracking-[-0.02em]">{cat}</h2></div><ul className="divide-y divide-white/10">{items.map(source=><li key={source.id} className="flex items-center gap-3 p-4"><div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-2xl leading-tight">{source.name}{source.is_paywall === 1 && <span className="rounded-full border border-white/20 px-2 py-0.5 text-xs text-white/70" title="Behind paywall">€</span>}</p><p className="text-white/50">{source.url}</p></div><button type="button" onClick={()=>handlePaywallToggle(source)} className={`h-8 rounded-full border px-3 text-xs ${source.is_paywall===1?"border-white bg-white/10 text-white":"border-white/20 text-white/60"}`} title="Toggle paywall">€</button><button onClick={()=>handleToggle(source)} className={`h-8 w-14 rounded-full border ${source.active?"bg-white border-white":"border-white/20"}`}><span className={`block h-6 w-6 rounded-full bg-black transition-transform ${source.active?"translate-x-6":"translate-x-1"}`} /></button><select value={source.category ?? "other"} onChange={(e)=>handleCategoryChange(source, e.target.value)} className="h-8 rounded-full border border-white/20 bg-transparent px-3 text-xs">{categories.map(c=><option key={c} value={c} className="bg-black">{c}</option>)}</select><button onClick={() => handleDelete(source)} className="rounded-full border border-red-400/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10">Remove</button></li>)}</ul></section>)}</div>
     {loading && <p className="mt-6 text-white/50">Loading…</p>}
