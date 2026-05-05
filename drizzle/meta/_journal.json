@@ -29,6 +29,13 @@
       "when": 1777987360193,
       "tag": "0003_worthless_machine_man",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777987741666,
+      "tag": "0004_goofy_infant_terrible",
+      "breakpoints": true
     }
   ]
 }

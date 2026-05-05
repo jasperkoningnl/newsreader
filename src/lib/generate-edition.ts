@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
 import { article_likes, articles, editions, sources, taste_entries } from "@/db/schema";
-import { and, desc, eq, gte, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { detectPaywall } from "./paywall-detect";
 
 const client = new Anthropic();
 
@@ -22,6 +23,39 @@ type CuratorItem = { id: number; motivatie: string };
 
 const SOURCE_LIMIT = 2;
 const PAYWALL_LIMIT = 2;
+const PAYWALL_CONCURRENCY = 5;
+
+async function detectPaywallBatch(
+  items: { id: number; url: string }[]
+): Promise<Map<number, boolean | null>> {
+  const result = new Map<number, boolean | null>();
+  let cursor = 0;
+  const now = sql`(datetime('now'))`;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const i = cursor++;
+      const item = items[i];
+      const verdict = await detectPaywall(item.url);
+      result.set(item.id, verdict.is_paywall);
+      try {
+        await db
+          .update(articles)
+          .set({
+            is_paywall: verdict.is_paywall === null ? null : verdict.is_paywall ? 1 : 0,
+            paywall_checked_at: now,
+          })
+          .where(eq(articles.id, item.id));
+      } catch (err) {
+        console.warn("[paywall.persist] failed", item.id, err);
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(PAYWALL_CONCURRENCY, items.length) }, worker);
+  await Promise.all(workers);
+  return result;
+}
 const NL_CATEGORY = "local";
 const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "ontwikkelt", "update"];
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
@@ -330,7 +364,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
       category: articles.category,
       published_at: articles.published_at,
       source: sources.name,
-      is_paywall: sources.is_paywall,
+      article_paywall: articles.is_paywall,
+      source_paywall: sources.is_paywall,
     })
     .from(articles)
     .innerJoin(sources, eq(articles.source_id, sources.id))
@@ -344,12 +379,34 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
 
   const countPerSource: Record<string, number> = {};
   const candidates: Candidate[] = [];
+  const undetected: { id: number; url: string }[] = [];
   for (const a of all) {
     const n = countPerSource[a.source] ?? 0;
-    if (n < MAX_PER_SOURCE) {
-      candidates.push({ ...a, is_paywall: a.is_paywall === 1 });
-      countPerSource[a.source] = n + 1;
+    if (n >= MAX_PER_SOURCE) continue;
+    const effective = a.article_paywall ?? a.source_paywall ?? 0;
+    candidates.push({
+      id: a.id,
+      title: a.title,
+      description: a.description,
+      url: a.url,
+      category: a.category,
+      published_at: a.published_at,
+      source: a.source,
+      is_paywall: effective === 1,
+    });
+    if (a.article_paywall === null) undetected.push({ id: a.id, url: a.url });
+    countPerSource[a.source] = n + 1;
+  }
+
+  if (undetected.length) {
+    const updates = await detectPaywallBatch(undetected);
+    for (const c of candidates) {
+      const v = updates.get(c.id);
+      if (v !== undefined && v !== null) c.is_paywall = v;
     }
+    console.log(
+      `[edition.paywall-scan] checked=${undetected.length} hits=${[...updates.values()].filter((v) => v === true).length} unknown=${[...updates.values()].filter((v) => v === null).length}`
+    );
   }
   const pref = await fetchPreferenceContext();
   const score = (c: Candidate) => {

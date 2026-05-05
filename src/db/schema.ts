@@ -26,6 +26,8 @@ export const articles = sqliteTable("articles", {
   fetched_at: text("fetched_at").default(sql`(datetime('now'))`),
   category: text("category"),
   read: integer("read").default(0),
+  is_paywall: integer("is_paywall"),
+  paywall_checked_at: text("paywall_checked_at"),
 });
 
 export const editions = sqliteTable("editions", {

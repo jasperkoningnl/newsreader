@@ -270,3 +270,4 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 - ~~Feedback-loop op feed-items (duimpje omhoog/omlaag)~~ — like + dislike via `article_likes`, met curator-boost/penalty.
 - ~~Archief van eerdere edities~~ — `?date=YYYY-MM-DD` met "Previous edition"-link op de EndCard.
 - ~~Paywall-constraint in de curator~~ — `sources.is_paywall`-vlag, € indicator op cards en hard cap van 2 paywalled items per editie in `generate-edition.ts`.
+- ~~Paywall-detectie per artikel~~ — `articles.is_paywall` (nullable) wordt gevuld door `src/lib/paywall-detect.ts` (JSON-LD `isAccessibleForFree`, `<meta property="article:content_tier">`, host-fallbacks). Detectie loopt mee met edition-generatie op de candidate-pool en kan handmatig via `POST /api/paywall-scan` voor backfill. Effectieve waarde = `coalesce(article.is_paywall, source.is_paywall, 0)`.
