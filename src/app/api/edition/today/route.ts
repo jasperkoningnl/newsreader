@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { article_likes, articles, editions, sources } from "@/db/schema";
+import { article_likes, articles, editions, saved_articles, sources } from "@/db/schema";
 import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { requireInternalToken } from "@/lib/api-auth";
@@ -20,6 +20,7 @@ export type EditionItem = {
   motivatie: string;
   liked: boolean;
   disliked: boolean;
+  saved: boolean;
   is_paywall: boolean;
 };
 
@@ -106,10 +107,12 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
       is_paywall: sql<number>`coalesce(${articles.is_paywall}, ${sources.is_paywall}, 0)`,
       liked: sql<number>`max(case when ${article_likes.liked} = 1 then 1 else 0 end)`,
       disliked: sql<number>`max(case when ${article_likes.liked} = 0 then 1 else 0 end)`,
+      saved: sql<number>`max(case when ${saved_articles.id} is not null then 1 else 0 end)`,
     })
     .from(articles)
     .innerJoin(sources, eq(articles.source_id, sources.id))
     .leftJoin(article_likes, eq(article_likes.article_id, articles.id))
+    .leftJoin(saved_articles, eq(saved_articles.article_id, articles.id))
     .where(inArray(articles.id, ids))
     .groupBy(
       articles.id,
@@ -128,7 +131,7 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
   const items: EditionItem[] = parsed
     .map((p) => {
       const a = byId[p.id];
-      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked), disliked: Boolean(a.disliked), is_paywall: a.is_paywall === 1 } : null;
+      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked), disliked: Boolean(a.disliked), saved: Boolean(a.saved), is_paywall: a.is_paywall === 1 } : null;
     })
     .filter((x): x is EditionItem => x !== null);
 
