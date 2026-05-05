@@ -1,0 +1,1 @@
+ALTER TABLE `articles` ADD `signal_score` real DEFAULT 0;

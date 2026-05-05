@@ -5,6 +5,7 @@ import { and, desc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { detectPaywall } from "./paywall-detect";
+import { promoteSignalsToArticles } from "./promote-signals";
 
 const client = new Anthropic();
 
@@ -17,6 +18,7 @@ type Candidate = {
   published_at: string | null;
   source: string;
   is_paywall: boolean;
+  signal_score: number;
 };
 
 type CuratorItem = { id: number; motivatie: string };
@@ -115,10 +117,10 @@ async function fetchTasteContext(): Promise<string> {
 
 async function runCurator(candidates: Candidate[], profile: string, tasteContext: string, pref: PreferenceContext): Promise<CuratorItem[]> {
   const list = candidates
-    .map(
-      (a) =>
-        `ID ${a.id} | bron: ${a.source}${a.is_paywall ? " (paywall)" : ""} | categorie: ${a.category ?? "overig"} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`
-    )
+    .map((a) => {
+      const signal = a.signal_score > 0 ? ` | signaal=${a.signal_score.toFixed(1)}` : "";
+      return `ID ${a.id} | bron: ${a.source}${a.is_paywall ? " (paywall)" : ""} | categorie: ${a.category ?? "overig"}${signal} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`;
+    })
     .join("\n\n");
 
   const prefContext = `\nVoorrang op basis van likes (>3):\n- Bronnen: ${[...pref.preferredSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.preferredTopics].join(", ") || "geen"}\n\nDeprioriteer op basis van dislikes (≥2):\n- Bronnen: ${[...pref.dislikedSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.dislikedTopics].join(", ") || "geen"}\n`;
@@ -141,6 +143,12 @@ HARDE REGELS (verplicht, geen uitzonderingen):
 - Maximaal 2 breaking-news items; de rest moet een dag later nog leesbaar zijn
 - Maximaal ${PAYWALL_LIMIT} items achter een paywall (gemarkeerd met "(paywall)")
 - 1 verrassingsitem buiten de verwachte interesses (serendipity)
+
+SIGNALEN (Reddit-saved/upvoted, Bluesky-likes/reposts):
+- Items met "signaal=X" zijn opgepikt uit Jasper's eigen activiteit. Hoe hoger, hoe sterker.
+- Geef voorkeur aan signaal>=1.0 wanneer het item artikel-waardig is (langer leesbaar stuk, geen meme/screenshot/korte clip).
+- Wees STRENG: niet elk gesaved Reddit-link is feed-waardig. Sla items over die duidelijk geen leesartikel zijn (humor-posts, korte plaatjes-context, twitter-screenshots, listicles zonder substance), zelfs bij hoog signaal.
+- Probeer minstens 1 item met signaal>=0.5 te selecteren als die er is — dat houdt de feed verbonden met wat Jasper actief volgt.
 
 GEWENSTE MIX:
 - 2-3 tech/AI (waarvan max 1 van dezelfde tech-bron)
@@ -353,6 +361,13 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     .replace("T", " ")
     .slice(0, 19);
 
+  try {
+    const promote = await promoteSignalsToArticles();
+    console.log("[edition.signals]", JSON.stringify(promote));
+  } catch (error) {
+    console.error("[edition.signals] failed (continuing without)", error);
+  }
+
   // Fetch all unread recent articles ordered newest-first, then cap per source so
   // no single high-volume source dominates the curator's input.
   const all = await db
@@ -366,6 +381,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
       source: sources.name,
       article_paywall: articles.is_paywall,
       source_paywall: sources.is_paywall,
+      signal_score: articles.signal_score,
     })
     .from(articles)
     .innerJoin(sources, eq(articles.source_id, sources.id))
@@ -393,6 +409,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
       published_at: a.published_at,
       source: a.source,
       is_paywall: effective === 1,
+      signal_score: a.signal_score ?? 0,
     });
     if (a.article_paywall === null) undetected.push({ id: a.id, url: a.url });
     countPerSource[a.source] = n + 1;

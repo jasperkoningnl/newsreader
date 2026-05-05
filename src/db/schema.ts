@@ -28,6 +28,7 @@ export const articles = sqliteTable("articles", {
   read: integer("read").default(0),
   is_paywall: integer("is_paywall"),
   paywall_checked_at: text("paywall_checked_at"),
+  signal_score: real("signal_score").default(0),
 });
 
 export const editions = sqliteTable("editions", {
