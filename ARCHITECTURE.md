@@ -255,6 +255,19 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 
 1. **Smaak-algoritme consolideren** — `profile.md` (tekst), mix-regels (hardcoded in `generate-edition.ts`) en `taste_entries` (DB) overlappen nu. Trek ze samen tot één tunebare smaakbron, zodat finetunen één plek heeft.
 2. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
+3. **Taste als tweede feed (media-aanbevelingen)** — het tabblad Taste is nu een passief logboek; de log-actie heeft geen payoff. Bouw het uit tot een parallelle feed met titels (geen artikelen) voor series, films, documentaires, games en boeken. Hergebruikt dezelfde brondata (RSS, Reddit, Bluesky via `link_signals`) maar aggregeert op entiteit in plaats van URL.
+
+   **Architectuur (schets):**
+   - Nieuwe tabel `media_entities` (id, type, title, year, external_id, external_source, poster_url, rating_external) — gekoppeld aan TMDB (film/serie), IGDB (games), OpenLibrary (boeken). Eén externe ID per medium om duplicaten ("Andor" / "Andor S2" / "Star Wars: Andor") te resolven.
+   - Nieuwe tabel `media_mentions` (entity_id, link_signal_id of article_id, weight, seen_at) — koppelt mentions van titels aan signalen, vergelijkbaar met hoe `link_signals` nu artikelen voedt.
+   - Entity-extractie via Claude Haiku op nieuwe artikelen + reddit/bluesky-signalen (NER op titels), of regex/quote-detectie als goedkopere eerste pass.
+   - Aggregatie: mentions × source_weight + externe rating (IMDB/Metacritic/IGDB) + smaak-match tegen `profile.md` smaakprofiel.
+   - `taste_entries` wordt feedback-signaal: een entry sluit een titel uit van de feed (al geconsumeerd) én voedt het smaakprofiel.
+   - Eigen API-routes (`/api/media/feed`, `/api/media/entities`) en een nieuwe view binnen het Taste-tabblad — gescheiden van de artikelen-curator, dezelfde bronnen.
+
+   **Hobbel:** entity resolution is ~70% van het werk. Zonder externe IDs wordt de lijst rommelig.
+
+   **Bouwvolgorde:** begin met één medium (series + films via TMDB) en de bestaande Reddit/Bluesky/RSS-bronnen. Bewijs de loop voordat games/boeken/docu's erbij komen — anders vier half-werkende pipelines tegelijk.
 
 ### Verder weg
 
