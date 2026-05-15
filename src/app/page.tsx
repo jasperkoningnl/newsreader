@@ -59,6 +59,7 @@ export default async function FeedPage({
         archived
         olderDate={olderDate}
         newerDate={newerDate}
+        feedHref={`/?date=${date}`}
       />
     );
   }
@@ -92,6 +93,7 @@ export default async function FeedPage({
       items={editionData.items}
       createdAt={editionData.created_at}
       olderDate={olderDate}
+      feedHref="/"
     />
   );
 }

@@ -1,13 +1,19 @@
 "use client";
 
 import type { EditionItem } from "./api/edition/today/route";
-import { useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type RefreshState = "idle" | "busy" | "error";
 
 const BATCH_SIZE = 15;
+const FEED_SCROLL_STORAGE_PREFIX = "newsreader:feed-scroll:";
+
+type SavedFeedPosition = {
+  itemId: number | null;
+  scrollTop: number;
+};
 
 function RefreshButton() {
   const router = useRouter();
@@ -96,7 +102,17 @@ function RefreshButton() {
   );
 }
 
-function Card({ item, index }: { item: EditionItem; index: number }) {
+function Card({
+  item,
+  index,
+  feedHref,
+  onOpen,
+}: {
+  item: EditionItem;
+  index: number;
+  feedHref: string;
+  onOpen: (itemId: number) => void;
+}) {
   const [imgFailed, setImgFailed] = useState(false);
   const [liked, setLiked] = useState(item.liked);
   const [disliked, setDisliked] = useState(item.disliked);
@@ -179,7 +195,9 @@ function Card({ item, index }: { item: EditionItem; index: number }) {
 
   return (
     <Link
-      href={`/article/${item.id}`}
+      id={`feed-item-${item.id}`}
+      href={{ pathname: `/article/${item.id}`, query: { from: feedHref } }}
+      onClick={() => onOpen(item.id)}
       className="group relative flex flex-col h-full snap-start overflow-hidden select-none md:h-[48vh] md:min-h-[420px] md:rounded-none"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
@@ -371,17 +389,70 @@ export default function FeedCards({
   archived = false,
   olderDate = null,
   newerDate = null,
+  feedHref = "/",
 }: {
   items: EditionItem[];
   createdAt: string | null;
   archived?: boolean;
   olderDate?: string | null;
   newerDate?: string | null;
+  feedHref?: string;
 }) {
+  const feedRef = useRef<HTMLDivElement>(null);
+  const storageKey = `${FEED_SCROLL_STORAGE_PREFIX}${feedHref}`;
+
+  const saveScrollPosition = useCallback((itemId: number | null = null) => {
+    const feedScroller = feedRef.current;
+    const mainScroller = document.querySelector("main");
+    const scrollTop = Math.max(feedScroller?.scrollTop ?? 0, mainScroller?.scrollTop ?? 0);
+    const position: SavedFeedPosition = { itemId, scrollTop };
+    sessionStorage.setItem(storageKey, JSON.stringify(position));
+  }, [storageKey]);
+
+  useEffect(() => {
+    const feedScroller = feedRef.current;
+    const mainScroller = document.querySelector("main");
+    const rawPosition = sessionStorage.getItem(storageKey);
+    if (!rawPosition) return;
+
+    let savedPosition: SavedFeedPosition | null = null;
+    try {
+      savedPosition = JSON.parse(rawPosition) as SavedFeedPosition;
+    } catch {
+      sessionStorage.removeItem(storageKey);
+      return;
+    }
+
+    const restore = () => {
+      if (typeof savedPosition?.scrollTop === "number") {
+        if (feedScroller) feedScroller.scrollTop = savedPosition.scrollTop;
+        if (mainScroller) mainScroller.scrollTop = savedPosition.scrollTop;
+      }
+
+      if (savedPosition?.itemId) {
+        document
+          .getElementById(`feed-item-${savedPosition.itemId}`)
+          ?.scrollIntoView({ block: "start" });
+      }
+    };
+
+    const animationFrame = requestAnimationFrame(restore);
+    const timeout = window.setTimeout(restore, 120);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      window.clearTimeout(timeout);
+    };
+  }, [storageKey]);
+
   return (
-    <div className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-6 md:p-6 md:bg-[#141313]">
+    <div
+      ref={feedRef}
+      onScroll={() => saveScrollPosition()}
+      className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-6 md:p-6 md:bg-[#141313]"
+    >
       {items.map((item, i) => (
-        <Card key={item.id} item={item} index={i} />
+        <Card key={item.id} item={item} index={i} feedHref={feedHref} onOpen={saveScrollPosition} />
       ))}
       <EndCard
         createdAt={createdAt}
