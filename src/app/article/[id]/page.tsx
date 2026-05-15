@@ -7,8 +7,23 @@ import { extractArticleContent } from "@/lib/extract-article";
 
 export const dynamic = "force-dynamic";
 
-export default async function ArticlePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+function getFeedHref(from: string | undefined) {
+  if (!from || !from.startsWith("/") || from.startsWith("//") || from.startsWith("/article/")) {
+    return "/";
+  }
+
+  return from;
+}
+
+export default async function ArticlePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const [{ id }, { from }] = await Promise.all([params, searchParams]);
+  const feedHref = getFeedHref(from);
   const articleId = Number(id);
   if (!Number.isInteger(articleId) || articleId <= 0) notFound();
 
@@ -42,7 +57,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
 
   return (
     <article className="mx-auto w-full max-w-3xl px-5 pb-20 pt-8 md:px-10 md:pt-12">
-      <Link href="/" className="metadata-caps text-white/70 transition-colors hover:text-white">
+      <Link href={feedHref} scroll={false} className="metadata-caps text-white/70 transition-colors hover:text-white">
         ← Back to feed
       </Link>
 
@@ -115,7 +130,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ id: st
 
       <div className="mt-6">
         <Link
-          href="/"
+          href={feedHref}
+          scroll={false}
           className="metadata-caps text-white/70 transition-colors hover:text-white"
         >
           ← Back to feed
