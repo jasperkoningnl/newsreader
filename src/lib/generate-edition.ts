@@ -6,6 +6,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { detectPaywall } from "./paywall-detect";
 import { promoteSignalsToArticles } from "./promote-signals";
+import { cleanHtmlText } from "./html-text";
 
 const client = new Anthropic();
 
@@ -402,8 +403,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     const effective = a.article_paywall ?? a.source_paywall ?? 0;
     candidates.push({
       id: a.id,
-      title: a.title,
-      description: a.description,
+      title: cleanHtmlText(a.title),
+      description: a.description ? cleanHtmlText(a.description) : null,
       url: a.url,
       category: a.category,
       published_at: a.published_at,

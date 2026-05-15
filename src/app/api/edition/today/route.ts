@@ -3,6 +3,7 @@ import { article_likes, articles, editions, saved_articles, sources } from "@/db
 import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { requireInternalToken } from "@/lib/api-auth";
+import { cleanHtmlText } from "@/lib/html-text";
 
 export const maxDuration = 300;
 import { generateEdition } from "@/lib/generate-edition";
@@ -134,7 +135,19 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
   const items: EditionItem[] = parsed
     .map((p) => {
       const a = byId[p.id];
-      return a ? { ...a, motivatie: p.motivatie, liked: Boolean(a.liked), disliked: Boolean(a.disliked), saved: Boolean(a.saved), is_paywall: a.is_paywall === 1, signal_score: a.signal_score ?? 0 } : null;
+      return a
+        ? {
+            ...a,
+            title: cleanHtmlText(a.title),
+            description: a.description ? cleanHtmlText(a.description) : null,
+            motivatie: cleanHtmlText(p.motivatie),
+            liked: Boolean(a.liked),
+            disliked: Boolean(a.disliked),
+            saved: Boolean(a.saved),
+            is_paywall: a.is_paywall === 1,
+            signal_score: a.signal_score ?? 0,
+          }
+        : null;
     })
     .filter((x): x is EditionItem => x !== null);
 

@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { articles, saved_articles, sources } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
+import { cleanHtmlText } from "@/lib/html-text";
 import SavedList from "./saved-list";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +22,16 @@ export default async function SavedPage() {
     .innerJoin(sources, eq(articles.source_id, sources.id))
     .orderBy(desc(saved_articles.saved_at));
 
+  const cleanedItems = items.map((item) => ({
+    ...item,
+    title: cleanHtmlText(item.title),
+    description: item.description ? cleanHtmlText(item.description) : null,
+  }));
+
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-10 md:py-14">
       <h1 className="text-5xl font-bold tracking-[-0.03em]">Saved</h1>
-      <SavedList items={items} />
+      <SavedList items={cleanedItems} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { articles, sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { extractArticleContent } from "@/lib/extract-article";
+import { cleanHtmlText } from "@/lib/html-text";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,12 @@ export default async function ArticlePage({
   if (!article) notFound();
 
   const extracted = await extractArticleContent(article.url).catch(() => null);
+  const title = cleanHtmlText(extracted?.title ?? article.title);
+  const description = extracted?.excerpt
+    ? cleanHtmlText(extracted.excerpt)
+    : article.description
+      ? cleanHtmlText(article.description)
+      : null;
 
   const publishedAt = article.published_at
     ? new Date(article.published_at).toLocaleDateString("en-US", {
@@ -78,7 +85,7 @@ export default async function ArticlePage({
       </div>
 
       <h1 className="mt-3 text-4xl font-bold leading-[1.05] tracking-[-0.03em] text-white md:text-6xl">
-        {article.title}
+        {title}
       </h1>
 
       {article.image_url && (
@@ -94,9 +101,9 @@ export default async function ArticlePage({
 
       {extracted ? (
         <section className="mt-8 space-y-7">
-          {(extracted.excerpt ?? article.description) && (
+          {description && (
             <p className="text-lg leading-relaxed text-white/85">
-              {extracted.excerpt ?? article.description}
+              {description}
             </p>
           )}
           <div className="max-w-2xl space-y-6 text-[1.08rem] leading-9 text-white/90">
@@ -106,8 +113,8 @@ export default async function ArticlePage({
           </div>
         </section>
       ) : (
-        article.description && (
-          <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/85">{article.description}</p>
+        description && (
+          <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/85">{description}</p>
         )
       )}
 

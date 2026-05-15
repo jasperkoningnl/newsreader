@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { articles, link_signals, sources } from "@/db/schema";
 import { eq, gte, sql } from "drizzle-orm";
 import { discoverFeedUrl } from "./feed-discovery";
+import { cleanHtmlText } from "./html-text";
 
 const NON_ARTICLE_HOSTS = new Set([
   "imgur.com",
@@ -185,9 +186,9 @@ export async function promoteSignalsToArticles(): Promise<PromoteResult> {
         .insert(articles)
         .values({
           source_id: src.id,
-          title: agg.title ?? agg.url,
+          title: agg.title ? cleanHtmlText(agg.title) : agg.url,
           url: agg.url,
-          description: agg.description,
+          description: agg.description ? cleanHtmlText(agg.description).slice(0, 500) : null,
           image_url: agg.image_url,
           published_at: null,
           fetched_at: sql`(datetime('now'))`,
