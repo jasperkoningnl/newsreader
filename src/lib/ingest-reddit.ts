@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { link_signals, type NewLinkSignal } from "@/db/schema";
 import { getSaved, getUpvoted, type RedditPost } from "./reddit";
+import { cleanHtmlText } from "./html-text";
 import { normalizeUrl } from "./url-normalize";
 
 const SKIP_HOSTS = new Set([
@@ -44,8 +45,8 @@ function buildSignal(
   return {
     url: post.url,
     url_normalized: normalized,
-    title: post.title || null,
-    description: post.selftext ? post.selftext.slice(0, 500) : null,
+    title: post.title ? cleanHtmlText(post.title) : null,
+    description: post.selftext ? cleanHtmlText(post.selftext).slice(0, 500) : null,
     image_url: post.preview_image ?? post.thumbnail,
     source_platform: "reddit",
     source_handle: `r/${post.subreddit}`,

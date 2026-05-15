@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { articles, saved_articles, sources } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { cleanHtmlText } from "@/lib/html-text";
 
 export type SavedItem = {
   id: number;
@@ -34,7 +35,11 @@ export async function GET() {
       .innerJoin(sources, eq(articles.source_id, sources.id))
       .orderBy(desc(saved_articles.saved_at));
 
-    const items: SavedItem[] = rows;
+    const items: SavedItem[] = rows.map((row) => ({
+      ...row,
+      title: cleanHtmlText(row.title),
+      description: row.description ? cleanHtmlText(row.description) : null,
+    }));
     return NextResponse.json({ items });
   } catch (error) {
     console.error("GET /api/saved:", error);

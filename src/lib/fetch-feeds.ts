@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { articles, sources } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import Parser from "rss-parser";
+import { cleanHtmlText } from "./html-text";
 import { assertSafePublicUrl } from "./net-safety";
 
 const FAILURE_THRESHOLD = 3;
@@ -24,35 +25,8 @@ const parser = new Parser<Record<string, unknown>, RssItem>({
   timeout: 8000,
 });
 
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
-  copy: "©", reg: "®", trade: "™", hellip: "…", mdash: "—", ndash: "–",
-  lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", sbquo: "‚", bdquo: "„",
-  bull: "•", middot: "·", laquo: "«", raquo: "»", lsaquo: "‹", rsaquo: "›",
-  euro: "€", pound: "£", yen: "¥", cent: "¢", deg: "°", plusmn: "±",
-  times: "×", divide: "÷", frac12: "½", frac14: "¼", frac34: "¾",
-  sup2: "²", sup3: "³", micro: "µ", para: "¶", sect: "§", iquest: "¿",
-  iexcl: "¡", szlig: "ß", AElig: "Æ", aelig: "æ", OElig: "Œ", oelig: "œ",
-  Aacute: "Á", aacute: "á", Agrave: "À", agrave: "à", Acirc: "Â", acirc: "â",
-  Auml: "Ä", auml: "ä", Atilde: "Ã", atilde: "ã", Aring: "Å", aring: "å",
-  Ccedil: "Ç", ccedil: "ç", Eacute: "É", eacute: "é", Egrave: "È", egrave: "è",
-  Ecirc: "Ê", ecirc: "ê", Euml: "Ë", euml: "ë", Iacute: "Í", iacute: "í",
-  Igrave: "Ì", igrave: "ì", Icirc: "Î", icirc: "î", Iuml: "Ï", iuml: "ï",
-  Ntilde: "Ñ", ntilde: "ñ", Oacute: "Ó", oacute: "ó", Ograve: "Ò", ograve: "ò",
-  Ocirc: "Ô", ocirc: "ô", Ouml: "Ö", ouml: "ö", Otilde: "Õ", otilde: "õ",
-  Oslash: "Ø", oslash: "ø", Uacute: "Ú", uacute: "ú", Ugrave: "Ù", ugrave: "ù",
-  Ucirc: "Û", ucirc: "û", Uuml: "Ü", uuml: "ü", Yacute: "Ý", yacute: "ý", yuml: "ÿ",
-};
-
-function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&([a-zA-Z]+);/g, (whole, name) => NAMED_ENTITIES[name] ?? whole);
-}
-
 function cleanText(str: string): string {
-  return decodeHtmlEntities(str).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return cleanHtmlText(str);
 }
 
 function extractImageUrl(item: RssItem): string | null {

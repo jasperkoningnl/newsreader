@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { link_signals, type NewLinkSignal } from "@/db/schema";
 import { getActorLikes, getTimeline, login, type FeedItem } from "./bluesky";
+import { cleanHtmlText } from "./html-text";
 import { normalizeUrl } from "./url-normalize";
 
 const SKIP_HOSTNAMES = new Set([
@@ -47,8 +48,8 @@ function buildSignal(
   return {
     url: item.external.uri,
     url_normalized: normalized,
-    title: item.external.title ?? null,
-    description: item.external.description ?? null,
+    title: item.external.title ? cleanHtmlText(item.external.title) : null,
+    description: item.external.description ? cleanHtmlText(item.external.description) : null,
     image_url: item.external.thumb ?? null,
     source_platform: "bluesky",
     source_handle,
