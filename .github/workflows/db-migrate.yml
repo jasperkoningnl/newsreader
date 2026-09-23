@@ -1,0 +1,33 @@
+name: DB Migrate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'drizzle/**'
+      - '.github/workflows/db-migrate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Apply migrations to Turso
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: npm run db:migrate
