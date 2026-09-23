@@ -66,6 +66,8 @@ npm run db:migrate    # Rol migraties uit naar Turso
 npm run db:studio     # Open Drizzle Studio (lokale DB-viewer)
 ```
 
+Migraties draaien automatisch via `.github/workflows/db-migrate.yml` zodra er iets in `drizzle/` op `main` landt (handmatig: Actions → DB Migrate → Run workflow).
+
 ## Bouwvolgorde
 
 Zie `ARCHITECTURE.md` → sectie **Bouwvolgorde**. We zijn in **Fase 1**.
