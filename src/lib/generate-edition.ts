@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
-import { article_likes, articles, editions, sources, taste_entries } from "@/db/schema";
+import { article_likes, articles, editions, sources } from "@/db/schema";
 import { and, desc, eq, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -100,23 +100,24 @@ async function fetchPreferenceContext(): Promise<PreferenceContext> {
   };
 }
 
-async function fetchTasteContext(): Promise<string> {
+async function fetchFeedbackExamples(): Promise<string> {
   const recent = await db
-    .select()
-    .from(taste_entries)
-    .orderBy(desc(taste_entries.added_at))
+    .select({ title: articles.title, source: sources.name, liked: article_likes.liked })
+    .from(article_likes)
+    .innerJoin(articles, eq(article_likes.article_id, articles.id))
+    .leftJoin(sources, eq(article_likes.source_id, sources.id))
+    .orderBy(desc(article_likes.created_at))
     .limit(30);
 
   if (!recent.length) return "";
 
   const lines = recent.map(
-    (e) =>
-      `${e.liked ? "✓" : "✗"} [${e.type}] ${e.title}${e.notes ? ` — ${e.notes}` : ""}`
+    (r) => `${r.liked === 0 ? "✗" : "✓"} ${cleanHtmlText(r.title)}${r.source ? ` (${r.source})` : ""}`
   );
-  return `\nRecent bekeken/gelezen/gespeeld door Jasper (gebruik als extra signaal voor zijn smaak):\n${lines.join("\n")}\n`;
+  return `\nRecent beoordeelde artikelen (✓ = like, ✗ = minder hiervan). Gebruik dit om te zien welk soort stuk Jasper wel/niet wil, niet alleen welke bron:\n${lines.join("\n")}\n`;
 }
 
-async function runCurator(candidates: Candidate[], profile: string, tasteContext: string, pref: PreferenceContext): Promise<CuratorItem[]> {
+async function runCurator(candidates: Candidate[], profile: string, feedbackExamples: string, pref: PreferenceContext): Promise<CuratorItem[]> {
   const list = candidates
     .map((a) => {
       const signal = a.signal_score > 0 ? ` | signaal=${a.signal_score.toFixed(1)}` : "";
@@ -175,7 +176,7 @@ Antwoord uitsluitend als geldig JSON array (geen markdown, geen tekst erbuiten):
     messages: [
       {
         role: "user",
-        content: `Smaak- en voorkeurscontext:${tasteContext}${prefContext}
+        content: `Voorkeurscontext:${feedbackExamples}${prefContext}
 Kandidaat-artikelen:
 ${list}`,
       },
@@ -437,8 +438,6 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     );
   };
 
-  candidates.sort((a, b) => score(b) - score(a));
-
   const seed = process.env.CURATOR_DEBUG_SEED ?? "";
   if (seed) {
     const seeded = (s: string) => {
@@ -450,6 +449,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   } else {
     candidates.sort(() => Math.random() - 0.5);
   }
+  // Shuffle first, then a stable sort on score: ties stay random, but likes/dislikes decide the order.
+  candidates.sort((a, b) => score(b) - score(a));
 
   if (candidates.length < 5) {
     throw new Error("Te weinig kandidaat-artikelen met afbeelding (< 5). Haal eerst feeds op.");
@@ -459,8 +460,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   console.log(`Curator: ${candidates.length} kandidaten van ${uniqueSources.size} bronnen:`, [...uniqueSources].join(", "));
 
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
-  const tasteContext = await fetchTasteContext();
-  const raw = await runCurator(candidates, profile, tasteContext, pref);
+  const feedbackExamples = await fetchFeedbackExamples();
+  const raw = await runCurator(candidates, profile, feedbackExamples, pref);
   const constrained = enforceConstraints(raw, candidates);
   const selected = constrained.items.slice(0, EDITION_SIZE);
 

@@ -37,16 +37,6 @@ export const editions = sqliteTable("editions", {
   items_json: text("items_json").notNull(),
 });
 
-export const taste_entries = sqliteTable("taste_entries", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  title: text("title").notNull(),
-  type: text("type").notNull(),
-  rating: integer("rating"),
-  liked: integer("liked").default(1),
-  notes: text("notes"),
-  added_at: text("added_at").default(sql`(datetime('now'))`),
-});
-
 export const article_likes = sqliteTable("article_likes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   article_id: integer("article_id").notNull().references(() => articles.id),
@@ -92,8 +82,6 @@ export type NewSource = typeof sources.$inferInsert;
 export type Article = typeof articles.$inferSelect;
 export type NewArticle = typeof articles.$inferInsert;
 export type Edition = typeof editions.$inferSelect;
-export type TasteEntry = typeof taste_entries.$inferSelect;
-export type NewTasteEntry = typeof taste_entries.$inferInsert;
 export type ArticleLike = typeof article_likes.$inferSelect;
 export type NewArticleLike = typeof article_likes.$inferInsert;
 export type SavedArticle = typeof saved_articles.$inferSelect;

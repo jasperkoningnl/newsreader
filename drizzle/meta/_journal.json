@@ -57,6 +57,13 @@
       "when": 1778008582307,
       "tag": "0007_right_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790186867313,
+      "tag": "0008_drop_taste_entries",
+      "breakpoints": true
     }
   ]
 }

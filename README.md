@@ -1,6 +1,6 @@
 # newsreader
 
-Persoonlijke nieuwsreader voor Jasper. Eén gebruiker, geen auth. Stelt 1x per dag een feed van maximaal 10 items samen op basis van RSS-bronnen, signalen uit Reddit en Bluesky, en een persoonlijk smaakprofiel. De feed is eindig: lees je 10 items en je bent klaar.
+Persoonlijke nieuwsreader voor Jasper. Eén gebruiker, geen auth. Stelt 1x per dag een feed van maximaal 10 items samen op basis van RSS-bronnen, signalen uit Reddit en Bluesky, een persoonlijk smaakprofiel en likes/dislikes op artikelen. De feed is eindig: lees je 10 items en je bent klaar.
 
 ## Stack
 
@@ -33,8 +33,10 @@ npm run db:studio     # open Drizzle Studio
 ## Schermen
 
 - `/` — Feed (editie van vandaag, schermvullende kaarten)
-- `/bronnen` — RSS-bronnen beheren
-- `/smaak` — Smaakprofiel-entries (series, films, boeken, games, muziek)
+- `/sources` — RSS-bronnen beheren
+- `/saved` — Opgeslagen artikelen, plus instructies voor opslaan vanuit browser/telefoon
+- `/save?url=…` — Losse link opslaan (doel van bookmarklet, Android-deelmenu en iOS Shortcut)
+- `/article/:id` — Reader-mode
 
 ## Environment variables
 

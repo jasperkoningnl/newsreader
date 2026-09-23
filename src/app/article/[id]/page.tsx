@@ -99,23 +99,18 @@ export default async function ArticlePage({
         </div>
       )}
 
-      {extracted ? (
-        <section className="mt-8 space-y-7">
-          {description && (
-            <p className="text-lg leading-relaxed text-white/85">
-              {description}
-            </p>
-          )}
-          <div className="max-w-2xl space-y-6 text-[1.08rem] leading-9 text-white/90">
-            {extracted.paragraphs.map((paragraph, index) => (
-              <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph}</p>
-            ))}
-          </div>
+      {(extracted?.byline || description) && (
+        <section className="mt-8 max-w-2xl space-y-3">
+          {description && <p className="text-xl leading-relaxed text-white/85">{description}</p>}
+          {extracted?.byline && <p className="metadata-caps text-white/50">{extracted.byline}</p>}
         </section>
-      ) : (
-        description && (
-          <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/85">{description}</p>
-        )
+      )}
+
+      {extracted?.html && (
+        <div
+          className="prose prose-invert prose-lg mt-10 max-w-2xl prose-headings:font-bold prose-headings:tracking-[-0.02em] prose-p:leading-8 prose-a:text-white prose-a:decoration-white/40 prose-a:underline-offset-4 hover:prose-a:decoration-white prose-blockquote:border-white/40 prose-blockquote:font-normal prose-blockquote:not-italic prose-blockquote:text-white/80 [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none prose-img:w-full prose-figcaption:text-white/50"
+          dangerouslySetInnerHTML={{ __html: extracted.html }}
+        />
       )}
 
       <a

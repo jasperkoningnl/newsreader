@@ -1,8 +1,10 @@
 import { db } from "@/db";
 import { articles, saved_articles, sources } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireSameOrigin } from "@/lib/api-auth";
 import { cleanHtmlText } from "@/lib/html-text";
+import { pickUrl, saveUrl, SaveUrlError } from "@/lib/save-url";
 
 export type SavedItem = {
   id: number;
@@ -44,5 +46,23 @@ export async function GET() {
   } catch (error) {
     console.error("GET /api/saved:", error);
     return NextResponse.json({ error: "Failed to fetch saved articles" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const unauthorized = requireSameOrigin(req);
+  if (unauthorized) return unauthorized;
+  try {
+    const body = await req.json().catch(() => ({}));
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : null);
+    const url = pickUrl(str(body?.url), str(body?.text));
+    if (!url) return NextResponse.json({ error: "No URL found" }, { status: 400 });
+
+    const saved = await saveUrl(url, str(body?.title)?.slice(0, 300) || null);
+    return NextResponse.json({ ...saved, title: cleanHtmlText(saved.title) }, { status: 201 });
+  } catch (error) {
+    if (error instanceof SaveUrlError) return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("POST /api/saved:", error);
+    return NextResponse.json({ error: "Failed to save URL" }, { status: 500 });
   }
 }

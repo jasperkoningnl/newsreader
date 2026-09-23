@@ -14,7 +14,6 @@ export const metadata: Metadata = {
 const navItems = [
   { href: "/", label: "The Feed" },
   { href: "/sources", label: "Sources" },
-  { href: "/taste", label: "Taste" },
   { href: "/saved", label: "Saved" },
 ];
 

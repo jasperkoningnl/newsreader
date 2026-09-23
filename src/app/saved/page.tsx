@@ -3,6 +3,7 @@ import { articles, saved_articles, sources } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { cleanHtmlText } from "@/lib/html-text";
 import SavedList from "./saved-list";
+import SaveTools from "./save-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function SavedPage() {
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-10 md:py-14">
       <h1 className="text-5xl font-bold tracking-[-0.03em]">Saved</h1>
+      <SaveTools />
       <SavedList items={cleanedItems} />
     </div>
   );

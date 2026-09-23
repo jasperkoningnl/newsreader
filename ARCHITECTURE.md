@@ -61,18 +61,11 @@ CREATE TABLE editions (
 );
 ```
 
-### taste_entries (smaakprofiel: wat ik kijk/lees/speel)
-```sql
-CREATE TABLE taste_entries (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  type TEXT NOT NULL,           -- series, film, boek, game, muziek
-  rating INTEGER,              -- 1-10, of null als geen rating
-  liked INTEGER DEFAULT 1,     -- 1 = goed, 0 = niet goed
-  notes TEXT,                  -- optionele notitie
-  added_at TEXT DEFAULT (datetime('now'))
-);
-```
+### article_likes / saved_articles
+
+Likes/dislikes op artikelniveau (`article_likes`) en opgeslagen artikelen (`saved_articles`). Zie `src/db/schema.ts`.
+
+> `taste_entries` en het Smaak-tabblad zijn verwijderd (september 2026): de log-actie had geen payoff. Smaak loopt nu via `profile.md` + likes/dislikes op artikelen.
 
 ## Schermen
 
@@ -107,27 +100,19 @@ Het eerste en belangrijkste scherm. Toont de editie van vandaag.
 
 **Toevoegen:** Invulveld bovenaan. Plak een URL (website of RSS-feed). De app probeert automatisch de RSS-feed te ontdekken (via link-tags in de HTML of bekende patronen als /rss, /feed, /atom.xml). Als dat niet lukt, handmatig de feed-URL invoeren.
 
-### 3. Mijn smaak — `/smaak`
+### 3. Opgeslagen — `/saved` en `/save`
 
-**Layout:** Tijdlijn van toegevoegde items, nieuwste bovenaan. Per item:
-- Titel
-- Type (series/film/boek/game/muziek) als icoontje
-- Rating (sterren of numeriek)
-- Optionele notitie
-- Datum toegevoegd
+Opgeslagen artikelen uit de feed plus losse links van buiten de app. Links komen binnen via `/save?url=…`:
+- plakken op `/save`
+- bookmarklet (desktop)
+- deelmenu op Android (PWA `share_target` in `manifest.webmanifest`)
+- iOS Shortcut die `/save?url=` opent (iOS ondersteunt geen Web Share Target)
 
-**Toevoegen:** Simpel formulier:
-- Tekstveld: "Wat heb je gekeken/gelezen/gespeeld?"
-- Type-selector (series, film, boek, game, muziek)
-- Rating (1-10, klikbaar)
-- Optioneel: "Vond ik niks" toggle (zet liked op 0)
-- Optioneel: notitieveld
-
-Geen autocomplete of IMDB-koppeling (voor nu). Gewoon typen en opslaan.
+Een losse link wordt een `articles`-rij met `read=1` (komt niet in de feed). Onbekende sites krijgen een inactieve bron, zodat opslaan geen abonnement op de hele site wordt.
 
 ### Navigatie
 
-Drie icoontjes onderaan (mobile-first): Feed, Bronnen, Smaak. Meer niet.
+Drie tabs onderaan (mobile-first): Feed, Sources, Saved. Meer niet.
 
 ## De Curator (AI-selectie)
 
@@ -146,7 +131,7 @@ Verwijder artikelen die al eerder in een editie zijn getoond (read = 1). Verwijd
 Stuur naar Claude Haiku:
 - De kandidaat-artikelen (titel, beschrijving, bron, categorie) — max ~50 stuks
 - Het profiel (profile.md, of een samenvatting daarvan)
-- De recente taste_entries (laatste 20)
+- De laatste 30 gelikete/gedislikete artikeltitels
 - De feedmix-regels uit het profiel
 
 **Prompt (kern):**
@@ -154,7 +139,7 @@ Stuur naar Claude Haiku:
 Je bent de redacteur van Jasper's persoonlijke nieuwsfeed.
 
 Selecteer precies 10 artikelen uit de kandidatenlijst die samen de beste
-dagelijkse feed vormen. Gebruik het profiel en de smaak-entries om te bepalen
+dagelijkse feed vormen. Gebruik het profiel en de likes/dislikes om te bepalen
 wat relevant is.
 
 > Implementatienotitie: de huidige code vraagt de curator bewust om 15 suggesties en
@@ -191,9 +176,10 @@ POST /api/sources            — Bron toevoegen (body: { url, name?, category? }
 PUT  /api/sources/:id        — Bron wijzigen
 DEL  /api/sources/:id        — Bron verwijderen
 
-GET  /api/taste              — Lijst taste entries
-POST /api/taste              — Entry toevoegen (body: { title, type, rating?, liked?, notes? })
-DEL  /api/taste/:id          — Entry verwijderen
+GET  /api/saved              — Lijst opgeslagen artikelen
+POST /api/saved              — Losse link opslaan (body: { url?, text?, title? })
+POST /api/articles/:id/like  — Like (body: { liked: true }) of dislike (body: { liked: false })
+POST /api/articles/:id/save  — Artikel uit de feed opslaan
 
 POST /api/fetch-feeds         — Handmatig feeds ophalen (wordt ook door cron aangeroepen)
 ```
@@ -229,9 +215,9 @@ Als een gebruiker een website-URL invoert (bijv. `https://www.theverge.com`), pr
 15. Vercel Cron instellen (dagelijks 06:00)
 
 ### Fase 3: Smaakprofiel
-16. API routes voor taste CRUD
-17. Smaak-scherm bouwen (toevoegen + tijdlijn)
-18. Taste entries meesturen naar curator-prompt
+16. ~~API routes voor taste CRUD~~
+17. ~~Smaak-scherm bouwen (toevoegen + tijdlijn)~~
+18. ~~Taste entries meesturen naar curator-prompt~~ — gebouwd en in september 2026 weer verwijderd; vervangen door likes/dislikes op artikelen
 
 ### Fase 4: Polish
 19. Design verfijnen (typografie, kleur, transitions)
@@ -253,21 +239,10 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 
 ### Korte termijn (volgorde gedreven door afhankelijkheid)
 
-1. **Smaak-algoritme consolideren** — `profile.md` (tekst), mix-regels (hardcoded in `generate-edition.ts`) en `taste_entries` (DB) overlappen nu. Trek ze samen tot één tunebare smaakbron, zodat finetunen één plek heeft.
-2. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
-3. **Taste als tweede feed (media-aanbevelingen)** — het tabblad Taste is nu een passief logboek; de log-actie heeft geen payoff. Bouw het uit tot een parallelle feed met titels (geen artikelen) voor series, films, documentaires, games en boeken. Hergebruikt dezelfde brondata (RSS, Reddit, Bluesky via `link_signals`) maar aggregeert op entiteit in plaats van URL.
-
-   **Architectuur (schets):**
-   - Nieuwe tabel `media_entities` (id, type, title, year, external_id, external_source, poster_url, rating_external) — gekoppeld aan TMDB (film/serie), IGDB (games), OpenLibrary (boeken). Eén externe ID per medium om duplicaten ("Andor" / "Andor S2" / "Star Wars: Andor") te resolven.
-   - Nieuwe tabel `media_mentions` (entity_id, link_signal_id of article_id, weight, seen_at) — koppelt mentions van titels aan signalen, vergelijkbaar met hoe `link_signals` nu artikelen voedt.
-   - Entity-extractie via Claude Haiku op nieuwe artikelen + reddit/bluesky-signalen (NER op titels), of regex/quote-detectie als goedkopere eerste pass.
-   - Aggregatie: mentions × source_weight + externe rating (IMDB/Metacritic/IGDB) + smaak-match tegen `profile.md` smaakprofiel.
-   - `taste_entries` wordt feedback-signaal: een entry sluit een titel uit van de feed (al geconsumeerd) én voedt het smaakprofiel.
-   - Eigen API-routes (`/api/media/feed`, `/api/media/entities`) en een nieuwe view binnen het Taste-tabblad — gescheiden van de artikelen-curator, dezelfde bronnen.
-
-   **Hobbel:** entity resolution is ~70% van het werk. Zonder externe IDs wordt de lijst rommelig.
-
-   **Bouwvolgorde:** begin met één medium (series + films via TMDB) en de bestaande Reddit/Bluesky/RSS-bronnen. Bewijs de loop voordat games/boeken/docu's erbij komen — anders vier half-werkende pipelines tegelijk.
+1. **Smaak-algoritme consolideren** — `profile.md` (tekst), mix-regels (hardcoded in `generate-edition.ts`) en likes/dislikes (DB) overlappen nu. Trek ze samen tot één tunebare smaakbron, zodat finetunen één plek heeft.
+2. **Feedback zichtbaar maken** — toon per editie welke likes/dislikes meewogen (voorkeursbronnen/-onderwerpen staan al in de `[edition.generated]`-log). Zonder dit is niet te controleren of feedback effect heeft.
+3. **Opgeslagen artikelen als signaal** — opslaan is een sterker signaal dan een like, maar telt nu niet mee voor de curator.
+4. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
 
 ### Verder weg
 
@@ -276,6 +251,7 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 ### Niet doen
 
 - ~~Gmail API koppeling voor nieuwsbrief-analyse~~ — nieuwsbrieven komen al via RSS binnen, geen tweede pad nodig.
+- ~~Taste als tweede feed (media-aanbevelingen via TMDB/IGDB)~~ — Smaak-tabblad is verwijderd (september 2026). Eerdere schets staat in de git-historie van dit bestand.
 
 ### Gedaan
 
@@ -286,4 +262,6 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 - ~~Saved-artikelen verhuizen naar de DB~~ — server-side opslag, voorwaarde voor de wekelijkse digest.
 - ~~Reddit API koppeling voor profiel-signalen~~ — ingest via GitHub Actions (`.github/workflows/reddit-ingest.yml` + `src/lib/ingest-reddit.ts`), gepromoot naar de candidate-pool via `src/lib/promote-signals.ts`.
 - ~~Bluesky als signaal-bron~~ — `src/lib/ingest-bluesky.ts` + `src/lib/bluesky.ts`, zelfde promote-pad als Reddit.
-- ~~Reader-mode voor niet-paywalled artikelen~~ — server-side via `@mozilla/readability` in `src/lib/extract-article.ts`.
+- ~~Reader-mode voor niet-paywalled artikelen~~ — server-side via `@mozilla/readability` + `linkedom` in `src/lib/extract-article.ts`; HTML wordt met `sanitize-html` op een allowlist gezet (koppen, lijsten, citaten, links, afbeeldingen) en opgemaakt met `@tailwindcss/typography`.
+- ~~Losse links opslaan~~ — `/save` + bookmarklet, Android-deelmenu (PWA share target), iOS via Shortcut.
+- ~~Likes beïnvloeden kandidaatvolgorde~~ — de score-sortering werd direct door de shuffle overschreven; nu eerst shuffle, dan stabiele sortering op score.
