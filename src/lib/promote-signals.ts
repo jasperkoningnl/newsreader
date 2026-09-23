@@ -87,12 +87,14 @@ async function aggregateRecent(): Promise<Aggregate[]> {
 
 type SourceMatch = { id: number; created: boolean };
 
-async function findOrCreateSource(hostname: string): Promise<SourceMatch> {
+export async function findSourceByHost(hostname: string): Promise<number | null> {
   const allSources = await db.select({ id: sources.id, url: sources.url }).from(sources);
-  for (const s of allSources) {
-    const existingHost = hostnameOf(s.url);
-    if (existingHost === hostname) return { id: s.id, created: false };
-  }
+  return allSources.find((s) => hostnameOf(s.url) === hostname)?.id ?? null;
+}
+
+async function findOrCreateSource(hostname: string): Promise<SourceMatch> {
+  const existingId = await findSourceByHost(hostname);
+  if (existingId) return { id: existingId, created: false };
 
   const websiteUrl = `https://${hostname}`;
   let feedUrl: string | null = null;

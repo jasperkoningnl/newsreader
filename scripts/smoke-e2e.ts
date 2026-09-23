@@ -28,20 +28,8 @@ async function run() {
     body: JSON.stringify({ category: "nieuws", active: 1 }),
   });
 
-  const createdTaste = await j("/api/taste", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: `Smoke Taste ${Date.now()}`, type: "series", rating: 7, liked: true }),
-  });
-
-  const tasteList = await j("/api/taste");
-  if (!Array.isArray(tasteList) || !tasteList.find((x) => x.id === createdTaste.id)) {
-    throw new Error("created taste entry not found");
-  }
-
   await j("/api/edition/today?force=true");
 
-  await j(`/api/taste/${createdTaste.id}`, { method: "DELETE" });
   await j(`/api/sources/${createdSource.id}`, { method: "DELETE" });
 
   console.log("Smoke e2e OK");

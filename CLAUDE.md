@@ -12,10 +12,11 @@ src/
     api/                # API route handlers
       sources/          # CRUD voor bronnen
       edition/          # Dagelijkse feed endpoints
-      taste/            # Smaakprofiel entries
+      saved/            # Opgeslagen artikelen + losse links opslaan
       fetch-feeds/      # RSS-ophaal endpoint (ook cron-target)
-    bronnen/            # /bronnen pagina
-    smaak/              # /smaak pagina
+    sources/            # /sources pagina
+    saved/              # /saved pagina
+    save/               # /save?url=… (bookmarklet, share target)
     page.tsx            # Feed (hoofdscherm)
   db/
     index.ts            # Drizzle client (Turso/libSQL)
@@ -55,7 +56,7 @@ Zet in `.env.local` voor lokale ontwikkeling (staat in `.gitignore`).
 
 ## Database
 
-Schema: `sources`, `articles`, `editions`, `taste_entries` — zie `src/db/schema.ts` en `ARCHITECTURE.md`.
+Schema: `sources`, `articles`, `editions`, `article_likes`, `saved_articles`, `link_signals` — zie `src/db/schema.ts` en `ARCHITECTURE.md`.
 
 Migraties aanmaken:
 
@@ -73,4 +74,4 @@ Volgende stap na de huidige setup: bronnen-scherm bouwen (`/bronnen`), RSS feed 
 
 ## Design-richting
 
-Schermvullend, bold, magazine-achtig. Geen kaartjes-met-schaduw. Donkere overlay op afbeeldingen. Mobile-first. Drie tabs onderaan: Feed, Bronnen, Smaak.
+Schermvullend, bold, magazine-achtig. Geen kaartjes-met-schaduw. Donkere overlay op afbeeldingen. Mobile-first. Drie tabs onderaan: Feed, Sources, Saved.
