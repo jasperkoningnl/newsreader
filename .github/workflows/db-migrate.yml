@@ -6,6 +6,7 @@ on:
     paths:
       - 'drizzle/**'
       - '.github/workflows/db-migrate.yml'
+      - 'scripts/migrate.ts'
   workflow_dispatch:
 
 concurrency:
