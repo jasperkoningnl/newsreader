@@ -7,8 +7,8 @@ import { join } from "path";
 import { detectPaywall } from "./paywall-detect";
 import { promoteSignalsToArticles } from "./promote-signals";
 import { cleanHtmlText } from "./html-text";
-import { EDITION_SIZE, fetchCategoryMix, mixLookup, normalizeCategory, type MixRow } from "./category-mix";
-import { fetchPreferenceContext, fetchTopicStates, labelPendingArticles, matchCandidateTopics, type PreferenceContext } from "./taste";
+import { EDITION_SIZE, LOCAL_CATEGORY, OTHER_CATEGORY, fetchCategoryMix, mixLookup, normalizeCategory, type MixRow } from "./category-mix";
+import { classifyCandidates, fetchPreferenceContext, fetchTopicStates, labelPendingArticles, type PreferenceContext } from "./taste";
 
 const client = new Anthropic();
 
@@ -66,7 +66,6 @@ async function detectPaywallBatch(
 }
 const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "ontwikkelt", "update"];
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
-const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur", "local"]);
 
 async function fetchFeedbackExamples(): Promise<string> {
   const recent = await db
@@ -108,7 +107,7 @@ async function runCurator(
     .map((a) => {
       const signal = a.signal_score > 0 ? ` | signaal=${a.signal_score.toFixed(1)}` : "";
       const taste = a.topic && a.taste !== 0 ? ` | smaak=${a.taste > 0 ? "+" : ""}${a.taste} (${a.topic})` : "";
-      return `ID ${a.id} | bron: ${a.source}${a.is_paywall ? " (paywall)" : ""} | categorie: ${a.category ?? "overig"}${signal}${taste} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`;
+      return `ID ${a.id} | bron: ${a.source}${a.is_paywall ? " (paywall)" : ""} | categorie: ${normalizeCategory(a.category)}${signal}${taste} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`;
     })
     .join("\n\n");
 
@@ -131,7 +130,7 @@ HARDE REGELS (verplicht, geen uitzonderingen):
 - Maximaal 2 breaking-news items; de rest moet een dag later nog leesbaar zijn
 - Maximaal ${PAYWALL_LIMIT} items achter een paywall (gemarkeerd met "(paywall)")
 - Maximaal ${TOPIC_LIMIT} items met hetzelfde smaak-onderwerp
-- 1 verrassingsitem buiten de verwachte interesses (serendipity)
+- 1 verrassingsitem uit een categorie buiten ${expectedCategories(mixRows).join(", ") || "de mix"} (serendipity)
 
 SIGNALEN (Reddit-saved/upvoted, Bluesky-likes/reposts):
 - Items met "signaal=X" zijn opgepikt uit Jasper's eigen activiteit. Hoe hoger, hoe sterker.
@@ -199,13 +198,18 @@ function isLongread(item: Candidate): boolean {
   return (item.description?.length ?? 0) > 220;
 }
 
-function isSurprise(item: Candidate): boolean {
-  const cat = (item.category ?? "overig").toLowerCase();
-  return !EXPECTED_CATEGORIES.has(cat);
+function expectedCategories(mixRows: MixRow[]): string[] {
+  return mixRows.filter((r) => r.min > 0).map((r) => r.category);
+}
+
+function surpriseCheck(mixRows: MixRow[]): (item: Candidate) => boolean {
+  const expected = new Set(expectedCategories(mixRows));
+  return (item) => !expected.has(normalizeCategory(item.category));
 }
 
 function getConstraintViolations(items: Candidate[], mixRows: MixRow[]): string[] {
   const mix = mixLookup(mixRows);
+  const isSurprise = surpriseCheck(mixRows);
   const violations: string[] = [];
   const count = (pred: (c: Candidate) => boolean) => items.filter(pred).length;
   const sources = new Set(items.map((c) => c.source));
@@ -230,6 +234,7 @@ function enforceConstraints(
   mixRows: MixRow[]
 ): { items: CuratorItem[]; violations: string[] } {
   const mix = mixLookup(mixRows);
+  const isSurprise = surpriseCheck(mixRows);
   const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const curatedById = Object.fromEntries(selected.map((s) => [s.id, s]));
   const result: Candidate[] = [];
@@ -323,20 +328,51 @@ function enforceConstraints(
 
 const MAX_PER_SOURCE = SOURCE_LIMIT;
 
-type TasteLog = { labeled: number; weighted_topics: number; matched: number; removed: { topic: string; title: string }[] };
+type TasteLog = {
+  labeled: number;
+  weighted_topics: number;
+  matched: number;
+  recategorized: number;
+  removed: { topic: string; title: string }[];
+};
 
-// Filters "never" topics out of the candidates in place and tags the rest with their taste weight.
-async function applyTopicTaste(candidates: Candidate[]): Promise<TasteLog> {
-  const log: TasteLog = { labeled: 0, weighted_topics: 0, matched: 0, removed: [] };
+// Local is a language choice, not a subject, so it stays with the source; other is only a fallback.
+function classifiableCategories(mixRows: MixRow[]): string[] {
+  return mixRows.map((r) => r.category).filter((c) => c !== LOCAL_CATEGORY && c !== OTHER_CATEGORY);
+}
+
+// Sets each candidate's category from its content, filters "never" topics out in place and tags the rest with their taste weight.
+async function applyClassification(candidates: Candidate[], mixRows: MixRow[]): Promise<TasteLog> {
+  const log: TasteLog = { labeled: 0, weighted_topics: 0, matched: 0, recategorized: 0, removed: [] };
   try {
     log.labeled = await labelPendingArticles();
+  } catch (error) {
+    console.error("[edition.label] failed (continuing with existing labels)", error);
+  }
+  try {
     const weighted = (await fetchTopicStates()).filter((t) => t.weight !== 0);
     log.weighted_topics = weighted.length;
-    const matches = await matchCandidateTopics(candidates, weighted);
-    log.matched = matches.size;
+    const { topics, categories } = await classifyCandidates(candidates, weighted, classifiableCategories(mixRows));
+    log.matched = topics.size;
+
+    const changed = new Map<string, number[]>();
+    for (const c of candidates) {
+      const category = categories.get(c.id);
+      if (!category || normalizeCategory(c.category) === LOCAL_CATEGORY || normalizeCategory(c.category) === category) continue;
+      c.category = category;
+      changed.set(category, [...(changed.get(category) ?? []), c.id]);
+      log.recategorized++;
+    }
+    try {
+      for (const [category, ids] of changed) {
+        await db.update(articles).set({ category }).where(inArray(articles.id, ids));
+      }
+    } catch (error) {
+      console.error("[edition.category] persist failed (edition uses the new categories anyway)", error);
+    }
 
     for (let i = candidates.length - 1; i >= 0; i--) {
-      const topic = matches.get(candidates[i].id);
+      const topic = topics.get(candidates[i].id);
       if (!topic) continue;
       if (topic.weight <= -2) {
         log.removed.push({ topic: topic.label, title: candidates[i].title });
@@ -347,7 +383,7 @@ async function applyTopicTaste(candidates: Candidate[]): Promise<TasteLog> {
       candidates[i].taste = topic.weight;
     }
   } catch (error) {
-    console.error("[edition.taste] failed (continuing without topic taste)", error);
+    console.error("[edition.classify] failed (continuing with source categories and without topic taste)", error);
   }
   return log;
 }
@@ -426,9 +462,9 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
   }
   const pref = await fetchPreferenceContext();
   const mixRows = await fetchCategoryMix();
-  const tasteLog = await applyTopicTaste(candidates);
+  const tasteLog = await applyClassification(candidates, mixRows);
   const score = (c: Candidate) => {
-    const cat = String(c.category ?? "overig").toLowerCase();
+    const cat = normalizeCategory(c.category);
     return (
       c.taste * 2 +
       (pref.preferredSources.has(c.source) ? 2 : 0) +

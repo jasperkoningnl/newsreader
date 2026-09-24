@@ -7,7 +7,7 @@ import { join } from "path";
 import { extractArticleContent } from "./extract-article";
 import { generateEdition } from "./generate-edition";
 import { cleanHtmlText } from "./html-text";
-import { fetchTopicStates, matchCandidateTopics } from "./taste";
+import { classifyCandidates, fetchTopicStates } from "./taste";
 
 const client = new Anthropic();
 const MODEL = "claude-sonnet-5";
@@ -254,7 +254,7 @@ async function applyTopicTaste(candidates: Candidate[]): Promise<string[]> {
   const removed: string[] = [];
   try {
     const weighted = (await fetchTopicStates()).filter((t) => t.weight !== 0);
-    const matches = await matchCandidateTopics(candidates, weighted);
+    const matches = (await classifyCandidates(candidates, weighted, [])).topics;
     for (let i = candidates.length - 1; i >= 0; i--) {
       const topic = matches.get(candidates[i].id);
       if (!topic) continue;
@@ -274,7 +274,7 @@ async function applyTopicTaste(candidates: Candidate[]): Promise<string[]> {
 
 function listLine(c: Candidate): string {
   const taste = c.topic ? ` | smaak=${c.taste > 0 ? "+" : ""}${c.taste} (${c.topic})` : "";
-  return `ID ${c.id} | bron: ${c.source}${c.is_paywall ? " (paywall)" : ""} | categorie: ${c.source_category || "overig"}${taste} | ${c.title}\n  ${c.description?.slice(0, 300) ?? "(geen beschrijving)"}`;
+  return `ID ${c.id} | bron: ${c.source}${c.is_paywall ? " (paywall)" : ""} | categorie: ${c.source_category || "other"}${taste} | ${c.title}\n  ${c.description?.slice(0, 300) ?? "(geen beschrijving)"}`;
 }
 
 async function askJson<T>(system: string, content: string, schema: Record<string, unknown>, label: string): Promise<T> {

@@ -47,7 +47,7 @@ CREATE TABLE articles (
   image_url TEXT,
   published_at TEXT,
   fetched_at TEXT DEFAULT (datetime('now')),
-  category TEXT,               -- overgenomen van source of door AI bepaald
+  category TEXT,               -- eerst van de bron; bij de dagelijkse run per kandidaat door Haiku bepaald (behalve local)
   read INTEGER DEFAULT 0,      -- al eerder in een feed getoond?
   opened_at TEXT               -- eerste keer geopend in de leesweergave (null = nooit)
 );
@@ -175,7 +175,7 @@ Regels:
 - Per categorie het min en max van het Taste-tabblad (local = Nederlandstalig, standaard min 1)
 - Minstens 1 longread (>5 min leestijd, schat in op basis van beschrijving)
 - Maximaal 2 breaking-news items
-- 1 verrassingsitem dat buiten de verwachte interesses valt
+- 1 verrassingsitem uit een categorie die niet verwacht wordt (verwacht = min > 0 in de mix)
 - Viral longreads en boekentips zijn altijd welkom
 
 Mix per categorie: [uit category_mix + standaard]
@@ -287,10 +287,8 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 
 ### Korte termijn (volgorde gedreven door afhankelijkheid)
 
-1. **Categorie per artikel in plaats van per bron** — `articles.category` is de categorie van de bron, dus een serie-stuk op The Verge telt als tech in de mix. Haiku zou de categorie per kandidaat kunnen bepalen (kan mee in de bestaande match-call).
-2. **Verrassings-regel repareren** — `isSurprise` kijkt naar een vaste lijst Nederlandse categorienamen (`EXPECTED_CATEGORIES`). Als bronnen Engelse namen hebben (`news`, `sports`, `science`), telt elk item daaruit als verrassing en is de regel zinloos. Check de categorienamen in productie en leid "verwacht" liever af uit de mix.
-3. **Feedback per editie zichtbaar maken** — het Taste-tabblad toont nu de stand per onderwerp; per editie tonen welke items door smaak zijn weggefilterd of voorrang kregen staat alleen nog in de `[edition.generated]`-log (`taste.removed`).
-4. **Zondageditie per mail** — de zondageditie staat in de app (zie **De zondageditie**); een mail-preview met link ernaar is nog niet gebouwd.
+1. **Feedback per editie zichtbaar maken** — het Taste-tabblad toont nu de stand per onderwerp; per editie tonen welke items door smaak zijn weggefilterd of voorrang kregen staat alleen nog in de `[edition.generated]`-log (`taste.removed`).
+2. **Zondageditie per mail** — de zondageditie staat in de app (zie **De zondageditie**); een mail-preview met link ernaar is nog niet gebouwd.
 
 ### Verder weg
 
@@ -302,6 +300,9 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 - ~~Taste als tweede feed (media-aanbevelingen via TMDB/IGDB)~~ — het oude Smaak-tabblad is verwijderd (september 2026). Eerdere schets staat in de git-historie van dit bestand.
 
 ### Gedaan
+
+- ~~Categorie per artikel~~ — `classifyCandidates` in `src/lib/taste.ts` bepaalt in dezelfde Haiku-call als de onderwerp-matching per kandidaat een categorie uit de mix (niet `local` en niet `other`) en schrijft die naar `articles.category`. `local` blijft per bron (het is een taalkeuze). Geen of ongeldig antwoord: de broncategorie blijft staan. Een lege categorie (en het oude `overig`) heet nu overal `other`.
+- ~~Verrassings-regel~~ — "verwacht" zijn de categorieën met min > 0 in de mix; de verrassing komt uit de rest. Voorheen een vaste lijst Nederlandse namen die in productie (Engelse namen) niets deed.
 
 - ~~Feedback-loop op feed-items (duimpje omhoog/omlaag)~~ — like + dislike via `article_likes`, met curator-boost/penalty.
 - ~~Archief van eerdere edities~~ — `?date=YYYY-MM-DD` met "Previous edition"-link op de EndCard.
