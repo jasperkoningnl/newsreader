@@ -1,12 +1,12 @@
 "use client";
 
-import type { EditionItem } from "./api/edition/today/route";
+import type { TodayEdition } from "./api/edition/today/route";
 import { useEffect, useState } from "react";
 import FeedCards from "./feed-cards";
 
 type State =
   | { phase: "loading" }
-  | { phase: "done"; items: EditionItem[]; createdAt: string | null }
+  | { phase: "done"; edition: TodayEdition }
   | { phase: "error"; message: string };
 
 export default function FeedLoader() {
@@ -17,7 +17,7 @@ export default function FeedLoader() {
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed to generate edition");
-        setState({ phase: "done", items: data.items, createdAt: data.created_at });
+        setState({ phase: "done", edition: data });
       })
       .catch((e) =>
         setState({ phase: "error", message: e instanceof Error ? e.message : "Unknown error" })
@@ -25,7 +25,16 @@ export default function FeedLoader() {
   }, []);
 
   if (state.phase === "done") {
-    return <FeedCards items={state.items} createdAt={state.createdAt} />;
+    const { edition } = state;
+    return (
+      <FeedCards
+        items={edition.items}
+        createdAt={edition.created_at}
+        kind={edition.kind}
+        tips={edition.tips}
+        saved={edition.saved}
+      />
+    );
   }
 
   if (state.phase === "error") {
@@ -41,7 +50,7 @@ export default function FeedLoader() {
               .then(async (res) => {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error ?? "Failed to generate edition");
-                setState({ phase: "done", items: data.items, createdAt: data.created_at });
+                setState({ phase: "done", edition: data });
               })
               .catch((e) =>
                 setState({ phase: "error", message: e instanceof Error ? e.message : "Unknown error" })

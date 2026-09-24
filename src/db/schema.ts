@@ -43,11 +43,13 @@ export const articles = sqliteTable("articles", {
   paywall_checked_at: text("paywall_checked_at"),
   signal_score: real("signal_score").default(0),
   topic_id: integer("topic_id").references(() => topics.id),
+  opened_at: text("opened_at"),
 });
 
 export const editions = sqliteTable("editions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   created_at: text("created_at").default(sql`(datetime('now'))`),
+  kind: text("kind").notNull().default("daily"),
   items_json: text("items_json").notNull(),
 });
 

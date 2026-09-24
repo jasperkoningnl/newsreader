@@ -78,6 +78,13 @@
       "when": 1790282247484,
       "tag": "0010_category_mix",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1790285087822,
+      "tag": "0011_sunday_edition",
+      "breakpoints": true
     }
   ]
 }
