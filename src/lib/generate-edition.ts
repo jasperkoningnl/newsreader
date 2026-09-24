@@ -7,6 +7,7 @@ import { join } from "path";
 import { detectPaywall } from "./paywall-detect";
 import { promoteSignalsToArticles } from "./promote-signals";
 import { cleanHtmlText } from "./html-text";
+import { fetchPreferenceContext, fetchTopicStates, labelPendingArticles, matchCandidateTopics, type PreferenceContext } from "./taste";
 
 const client = new Anthropic();
 
@@ -20,11 +21,14 @@ type Candidate = {
   source: string;
   is_paywall: boolean;
   signal_score: number;
+  topic: string | null;
+  taste: number;
 };
 
 type CuratorItem = { id: number; motivatie: string };
 
 const SOURCE_LIMIT = 2;
+const TOPIC_LIMIT = 2;
 const PAYWALL_LIMIT = 2;
 const PAYWALL_CONCURRENCY = 5;
 
@@ -64,42 +68,6 @@ const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
 const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur", "local"]);
 
-type PreferenceContext = {
-  preferredSources: Set<string>;
-  preferredTopics: Set<string>;
-  dislikedSources: Set<string>;
-  dislikedTopics: Set<string>;
-};
-
-const LIKE_THRESHOLD = 3;
-const DISLIKE_THRESHOLD = 2;
-
-async function fetchPreferenceContext(): Promise<PreferenceContext> {
-  const rows = await db
-    .select({ source: sources.name, topic: article_likes.topic, liked: article_likes.liked })
-    .from(article_likes)
-    .leftJoin(sources, eq(article_likes.source_id, sources.id));
-
-  const likeSrc: Record<string, number> = {};
-  const likeTop: Record<string, number> = {};
-  const dislikeSrc: Record<string, number> = {};
-  const dislikeTop: Record<string, number> = {};
-  for (const row of rows) {
-    const source = (row.source ?? "").trim();
-    const topic = String(row.topic ?? "overig").toLowerCase().trim() || "overig";
-    const buckets = row.liked === 0 ? [dislikeSrc, dislikeTop] : [likeSrc, likeTop];
-    if (source) buckets[0][source] = (buckets[0][source] ?? 0) + 1;
-    buckets[1][topic] = (buckets[1][topic] ?? 0) + 1;
-  }
-
-  return {
-    preferredSources: new Set(Object.entries(likeSrc).filter(([, n]) => n > LIKE_THRESHOLD).map(([k]) => k)),
-    preferredTopics: new Set(Object.entries(likeTop).filter(([, n]) => n > LIKE_THRESHOLD).map(([k]) => k)),
-    dislikedSources: new Set(Object.entries(dislikeSrc).filter(([, n]) => n >= DISLIKE_THRESHOLD).map(([k]) => k)),
-    dislikedTopics: new Set(Object.entries(dislikeTop).filter(([, n]) => n >= DISLIKE_THRESHOLD).map(([k]) => k)),
-  };
-}
-
 async function fetchFeedbackExamples(): Promise<string> {
   const recent = await db
     .select({ title: articles.title, source: sources.name, liked: article_likes.liked })
@@ -121,11 +89,12 @@ async function runCurator(candidates: Candidate[], profile: string, feedbackExam
   const list = candidates
     .map((a) => {
       const signal = a.signal_score > 0 ? ` | signaal=${a.signal_score.toFixed(1)}` : "";
-      return `ID ${a.id} | bron: ${a.source}${a.is_paywall ? " (paywall)" : ""} | categorie: ${a.category ?? "overig"}${signal} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`;
+      const taste = a.topic && a.taste !== 0 ? ` | smaak=${a.taste > 0 ? "+" : ""}${a.taste} (${a.topic})` : "";
+      return `ID ${a.id} | bron: ${a.source}${a.is_paywall ? " (paywall)" : ""} | categorie: ${a.category ?? "overig"}${signal}${taste} | ${a.title}\n  ${a.description?.slice(0, 200) ?? "(geen beschrijving)"}`;
     })
     .join("\n\n");
 
-  const prefContext = `\nVoorrang op basis van likes (>3):\n- Bronnen: ${[...pref.preferredSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.preferredTopics].join(", ") || "geen"}\n\nDeprioriteer op basis van dislikes (≥2):\n- Bronnen: ${[...pref.dislikedSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.dislikedTopics].join(", ") || "geen"}\n`;
+  const prefContext = `\nVoorrang op basis van likes (>3 en meer likes dan dislikes):\n- Bronnen: ${[...pref.preferredSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.preferredTopics].join(", ") || "geen"}\n\nDeprioriteer op basis van dislikes (≥3 en meer dislikes dan likes):\n- Bronnen: ${[...pref.dislikedSources].join(", ") || "geen"}\n- Onderwerpen/categorieën: ${[...pref.dislikedTopics].join(", ") || "geen"}\n`;
 
   const systemPrompt = `Je bent de redacteur van Jasper's persoonlijke nieuwsfeed.
 
@@ -144,6 +113,7 @@ HARDE REGELS (verplicht, geen uitzonderingen):
 - Minstens 1 longread (schat in op basis van titel/beschrijving)
 - Maximaal 2 breaking-news items; de rest moet een dag later nog leesbaar zijn
 - Maximaal ${PAYWALL_LIMIT} items achter een paywall (gemarkeerd met "(paywall)")
+- Maximaal ${TOPIC_LIMIT} items met hetzelfde smaak-onderwerp
 - 1 verrassingsitem buiten de verwachte interesses (serendipity)
 
 SIGNALEN (Reddit-saved/upvoted, Bluesky-likes/reposts):
@@ -151,6 +121,11 @@ SIGNALEN (Reddit-saved/upvoted, Bluesky-likes/reposts):
 - Geef voorkeur aan signaal>=1.0 wanneer het item artikel-waardig is (langer leesbaar stuk, geen meme/screenshot/korte clip).
 - Wees STRENG: niet elk gesaved Reddit-link is feed-waardig. Sla items over die duidelijk geen leesartikel zijn (humor-posts, korte plaatjes-context, twitter-screenshots, listicles zonder substance), zelfs bij hoog signaal.
 - Probeer minstens 1 item met signaal>=0.5 te selecteren als die er is — dat houdt de feed verbonden met wat Jasper actief volgt.
+
+SMAAK (per onderwerp, afgeleid uit Jasper's likes, dislikes en bewaarde artikelen, of door hem zelf ingesteld):
+- "smaak=+2" of "+1": geef voorrang, maar alleen binnen de mix hieronder. Smaak mag de mix nooit laten kantelen naar één onderwerp.
+- "smaak=-1": kies alleen als het stuk echt uitzonderlijk is.
+- Items zonder smaak-markering zijn neutraal, niet slechter.
 
 GEWENSTE MIX:
 - 2-3 tech/AI (waarvan max 1 van dezelfde tech-bron)
@@ -270,6 +245,7 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): {
     if (isBreaking(c) && breakingCount >= 2) return false;
     const paywallCount = current.filter((x) => x.is_paywall).length;
     if (c.is_paywall && paywallCount >= PAYWALL_LIMIT) return false;
+    if (c.topic && current.filter((x) => x.topic === c.topic).length >= TOPIC_LIMIT) return false;
     return true;
   };
 
@@ -326,7 +302,8 @@ function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): {
       const okCat = withNew.filter((c) => (c.category ?? "overig").toLowerCase() === newCat).length <= 3;
       const okBreaking = withNew.filter(isBreaking).length <= 2;
       const okPaywall = withNew.filter((c) => c.is_paywall).length <= PAYWALL_LIMIT;
-      if (!okSource || !okCat || !okBreaking || !okPaywall) continue;
+      const okTopic = !newItem.topic || withNew.filter((c) => c.topic === newItem.topic).length <= TOPIC_LIMIT;
+      if (!okSource || !okCat || !okBreaking || !okPaywall || !okTopic) continue;
 
       const removedCat = (removed.category ?? "overig").toLowerCase();
       sourceCounts[removed.source] = (sourceCounts[removed.source] ?? 0) - 1;
@@ -356,6 +333,35 @@ const MAX_PER_SOURCE = SOURCE_LIMIT;
 // We vragen de curator om 15 suggesties en knippen daarna terug naar 10,
 // zodat we na hard constraint-enforcement (mix/diversiteit) nog genoeg variatie overhouden.
 const EDITION_SIZE = 10;
+
+type TasteLog = { labeled: number; weighted_topics: number; matched: number; removed: { topic: string; title: string }[] };
+
+// Filters "never" topics out of the candidates in place and tags the rest with their taste weight.
+async function applyTopicTaste(candidates: Candidate[]): Promise<TasteLog> {
+  const log: TasteLog = { labeled: 0, weighted_topics: 0, matched: 0, removed: [] };
+  try {
+    log.labeled = await labelPendingArticles();
+    const weighted = (await fetchTopicStates()).filter((t) => t.weight !== 0);
+    log.weighted_topics = weighted.length;
+    const matches = await matchCandidateTopics(candidates, weighted);
+    log.matched = matches.size;
+
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      const topic = matches.get(candidates[i].id);
+      if (!topic) continue;
+      if (topic.weight <= -2) {
+        log.removed.push({ topic: topic.label, title: candidates[i].title });
+        candidates.splice(i, 1);
+        continue;
+      }
+      candidates[i].topic = topic.label;
+      candidates[i].taste = topic.weight;
+    }
+  } catch (error) {
+    console.error("[edition.taste] failed (continuing without topic taste)", error);
+  }
+  return log;
+}
 
 export async function generateEdition(): Promise<{ edition_id: number; count: number }> {
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
@@ -412,6 +418,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
       source: a.source,
       is_paywall: effective === 1,
       signal_score: a.signal_score ?? 0,
+      topic: null,
+      taste: 0,
     });
     if (a.article_paywall === null) undetected.push({ id: a.id, url: a.url });
     countPerSource[a.source] = n + 1;
@@ -428,9 +436,11 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     );
   }
   const pref = await fetchPreferenceContext();
+  const tasteLog = await applyTopicTaste(candidates);
   const score = (c: Candidate) => {
     const cat = String(c.category ?? "overig").toLowerCase();
     return (
+      c.taste * 2 +
       (pref.preferredSources.has(c.source) ? 2 : 0) +
       (pref.preferredTopics.has(cat) ? 2 : 0) -
       (pref.dislikedSources.has(c.source) ? 3 : 0) -
@@ -484,6 +494,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     preferred_topics: [...pref.preferredTopics],
     disliked_sources: [...pref.dislikedSources],
     disliked_topics: [...pref.dislikedTopics],
+    taste: tasteLog,
   }));
 
   await db

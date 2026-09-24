@@ -13,9 +13,11 @@ src/
       sources/          # CRUD voor bronnen
       edition/          # Dagelijkse feed endpoints
       saved/            # Opgeslagen artikelen + losse links opslaan
+      topics/           # Smaak-gewicht per onderwerp
       fetch-feeds/      # RSS-ophaal endpoint (ook cron-target)
     sources/            # /sources pagina
     saved/              # /saved pagina
+    taste/              # /taste pagina (smaak per onderwerp)
     save/               # /save?url=… (bookmarklet, share target)
     page.tsx            # Feed (hoofdscherm)
   db/
@@ -56,7 +58,7 @@ Zet in `.env.local` voor lokale ontwikkeling (staat in `.gitignore`).
 
 ## Database
 
-Schema: `sources`, `articles`, `editions`, `article_likes`, `saved_articles`, `link_signals` — zie `src/db/schema.ts` en `ARCHITECTURE.md`.
+Schema: `sources`, `articles`, `editions`, `article_likes`, `saved_articles`, `link_signals`, `topics` — zie `src/db/schema.ts` en `ARCHITECTURE.md`.
 
 Migraties aanmaken:
 
@@ -70,10 +72,8 @@ Migraties draaien automatisch via `.github/workflows/db-migrate.yml` zodra er ie
 
 ## Bouwvolgorde
 
-Zie `ARCHITECTURE.md` → sectie **Bouwvolgorde**. We zijn in **Fase 1**.
-
-Volgende stap na de huidige setup: bronnen-scherm bouwen (`/bronnen`), RSS feed discovery, feed-ophaal functie.
+Fase 1 en 2 uit `ARCHITECTURE.md` → **Bouwvolgorde** zijn gebouwd, fase 4 op Open Graph na. Volgende stappen staan in `ARCHITECTURE.md` → **Toekomstige uitbreidingen**.
 
 ## Design-richting
 
-Schermvullend, bold, magazine-achtig. Geen kaartjes-met-schaduw. Donkere overlay op afbeeldingen. Mobile-first. Drie tabs onderaan: Feed, Sources, Saved.
+Schermvullend, bold, magazine-achtig. Geen kaartjes-met-schaduw. Donkere overlay op afbeeldingen. Mobile-first. Vier tabs onderaan: Feed, Sources, Taste, Saved.

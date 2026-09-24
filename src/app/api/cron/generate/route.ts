@@ -4,7 +4,7 @@ import { editions } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function isAuthorized(req: NextRequest): boolean {
   const auth = req.headers.get("authorization");

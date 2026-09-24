@@ -1,8 +1,9 @@
 import { db } from "@/db";
 import { article_likes, articles, sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireSameOrigin } from "@/lib/api-auth";
+import { labelInBackground } from "@/lib/taste";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const unauthorized = requireSameOrigin(req);
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         liked,
       })
       .returning();
+
+    after(() => labelInBackground(articleId));
 
     const sourceName = article.source_id
       ? (await db.select({ name: sources.name }).from(sources).where(eq(sources.id, article.source_id)).limit(1))[0]?.name ?? null

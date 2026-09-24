@@ -1,8 +1,9 @@
 import { db } from "@/db";
 import { articles, saved_articles } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { requireSameOrigin } from "@/lib/api-auth";
+import { labelInBackground } from "@/lib/taste";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const unauthorized = requireSameOrigin(req);
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .values({ article_id: articleId })
       .onConflictDoNothing({ target: saved_articles.article_id })
       .returning();
+
+    after(() => labelInBackground(articleId));
 
     return NextResponse.json(created ?? { article_id: articleId, already_saved: true }, { status: 201 });
   } catch (error) {

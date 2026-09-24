@@ -15,6 +15,13 @@ export const sources = sqliteTable("sources", {
   last_failure_reason: text("last_failure_reason"),
 });
 
+export const topics = sqliteTable("topics", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  label: text("label").notNull().unique(),
+  manual_weight: integer("manual_weight"),
+  created_at: text("created_at").default(sql`(datetime('now'))`),
+});
+
 export const articles = sqliteTable("articles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   source_id: integer("source_id").references(() => sources.id),
@@ -29,6 +36,7 @@ export const articles = sqliteTable("articles", {
   is_paywall: integer("is_paywall"),
   paywall_checked_at: text("paywall_checked_at"),
   signal_score: real("signal_score").default(0),
+  topic_id: integer("topic_id").references(() => topics.id),
 });
 
 export const editions = sqliteTable("editions", {
@@ -79,6 +87,8 @@ export const link_signals = sqliteTable(
 
 export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
+export type Topic = typeof topics.$inferSelect;
+export type NewTopic = typeof topics.$inferInsert;
 export type Article = typeof articles.$inferSelect;
 export type NewArticle = typeof articles.$inferInsert;
 export type Edition = typeof editions.$inferSelect;
