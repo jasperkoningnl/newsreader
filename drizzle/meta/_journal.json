@@ -64,6 +64,13 @@
       "when": 1790186867313,
       "tag": "0008_drop_taste_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790281564544,
+      "tag": "0009_taste_topics",
+      "breakpoints": true
     }
   ]
 }

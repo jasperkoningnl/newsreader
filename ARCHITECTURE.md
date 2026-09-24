@@ -65,7 +65,11 @@ CREATE TABLE editions (
 
 Likes/dislikes op artikelniveau (`article_likes`) en opgeslagen artikelen (`saved_articles`). Zie `src/db/schema.ts`.
 
-> `taste_entries` en het Smaak-tabblad zijn verwijderd (september 2026): de log-actie had geen payoff. Smaak loopt nu via `profile.md` + likes/dislikes op artikelen.
+### topics (smaak-onderwerpen)
+
+Specifieke onderwerpen ("Apple: iPhone- en iOS-productnieuws", "Star Trek-series") die Haiku toekent aan artikelen die Jasper liket, dislikt of bewaart (`articles.topic_id`). `manual_weight` (-2 t/m 2) is null zolang het gewicht automatisch uit de signalen volgt. Zie `src/lib/taste.ts`.
+
+> Het oude Smaak-tabblad (`taste_entries`, handmatig media loggen) is in september 2026 verwijderd; het nieuwe Taste-tabblad draait op deze onderwerpen.
 
 ## Schermen
 
@@ -110,9 +114,18 @@ Opgeslagen artikelen uit de feed plus losse links van buiten de app. Links komen
 
 Een losse link wordt een `articles`-rij met `read=1` (komt niet in de feed). Onbekende sites krijgen een inactieve bron, zodat opslaan geen abonnement op de hele site wordt.
 
+### 4. Smaak — `/taste`
+
+Per onderwerp een schuif: Never, Less, Neutral, More, Lots.
+- Automatisch: likes (+1), bewaard (+2) en dislikes (−1,5) per onderwerp, met een halfwaardetijd van 90 dagen. Twee recente dislikes zonder tegengewicht = Never.
+- Verschuift Jasper een schuif, dan is die stand leidend tot hij terugzet naar automatisch.
+- Daaronder, alleen-lezen: welke bronnen en categorieën door de duimen voorrang of juist minder krijgen.
+
+Labelen gebeurt direct na een like/dislike/bewaren (op de achtergrond via `after()`), en bij de dagelijkse run en het openen van `/taste` voor alles wat nog geen label heeft.
+
 ### Navigatie
 
-Drie tabs onderaan (mobile-first): Feed, Sources, Saved. Meer niet.
+Vier tabs onderaan (mobile-first): Feed, Sources, Taste, Saved.
 
 ## De Curator (AI-selectie)
 
@@ -127,11 +140,16 @@ De cron-functie haalt nieuwe artikelen op uit alle actieve bronnen (RSS). Slaat 
 **Stap 2: Filteren**
 Verwijder artikelen die al eerder in een editie zijn getoond (read = 1). Verwijder artikelen ouder dan 3 dagen (configureerbaar). Resultaat: een pool van kandidaat-artikelen.
 
+**Stap 2b: Smaak-onderwerpen**
+Eén Haiku-call koppelt kandidaten aan de onderwerpen met een gewicht ≠ 0, op het niveau van het onderwerp (een Apple TV+-serie valt niet onder iPhone-nieuws). Kandidaten van een Never-onderwerp gaan eruit. De rest krijgt `smaak=±n` mee in de curator-prompt en telt mee in de sortering. Max 2 items per onderwerp per editie, en de categorie-regels blijven hard, zodat likes de mix niet laten kantelen.
+
 **Stap 3: AI-selectie**
 Stuur naar Claude Haiku:
 - De kandidaat-artikelen (titel, beschrijving, bron, categorie) — max ~50 stuks
 - Het profiel (profile.md, of een samenvatting daarvan)
 - De laatste 30 gelikete/gedislikete artikeltitels
+- Voorkeurs- en afgewezen bronnen/categorieën (pas bij ≥3 en een duidelijke meerderheid in één richting)
+- Per kandidaat het smaak-onderwerp en gewicht
 - De feedmix-regels uit het profiel
 
 **Prompt (kern):**
@@ -181,6 +199,8 @@ POST /api/saved              — Losse link opslaan (body: { url?, text?, title?
 POST /api/articles/:id/like  — Like (body: { liked: true }) of dislike (body: { liked: false })
 POST /api/articles/:id/save  — Artikel uit de feed opslaan
 
+PUT  /api/topics/:id          — Smaak-gewicht zetten (body: { weight: -2..2 | null }, null = automatisch)
+
 POST /api/fetch-feeds         — Handmatig feeds ophalen (wordt ook door cron aangeroepen)
 ```
 
@@ -194,6 +214,8 @@ Als een gebruiker een website-URL invoert (bijv. `https://www.theverge.com`), pr
 4. Als niks werkt: toon de gebruiker een veld om handmatig de feed-URL in te voeren
 
 ## Bouwvolgorde
+
+> Stand september 2026: fase 1 en 2 zijn gebouwd. Van fase 4 staat alleen punt 23 (Open Graph) nog open; `public/og.svg` bestaat maar wordt nog nergens gebruikt. Nieuw werk staat onder **Toekomstige uitbreidingen**.
 
 ### Fase 1: Fundament
 1. Next.js project opzetten met Tailwind
@@ -239,10 +261,9 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 
 ### Korte termijn (volgorde gedreven door afhankelijkheid)
 
-1. **Smaak-algoritme consolideren** — `profile.md` (tekst), mix-regels (hardcoded in `generate-edition.ts`) en likes/dislikes (DB) overlappen nu. Trek ze samen tot één tunebare smaakbron, zodat finetunen één plek heeft.
-2. **Feedback zichtbaar maken** — toon per editie welke likes/dislikes meewogen (voorkeursbronnen/-onderwerpen staan al in de `[edition.generated]`-log). Zonder dit is niet te controleren of feedback effect heeft.
-3. **Opgeslagen artikelen als signaal** — opslaan is een sterker signaal dan een like, maar telt nu niet mee voor de curator.
-4. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
+1. **Categorie-mix instelbaar op het Taste-tabblad** — min/max per categorie (bijv. tech 2–3), standaard de huidige mix. Vervangt de mix-regels die nu dubbel staan (hardcoded prompt in `generate-edition.ts` + `profile.md`) en maakt de categorie-cap in `enforceConstraints` configureerbaar. Aandachtspunt: `articles.category` is de categorie van de bron, dus een serie-stuk op The Verge telt als tech.
+2. **Feedback per editie zichtbaar maken** — het Taste-tabblad toont nu de stand per onderwerp; per editie tonen welke items door smaak zijn weggefilterd of voorrang kregen staat alleen nog in de `[edition.generated]`-log (`taste.removed`).
+3. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
 
 ### Verder weg
 
@@ -251,7 +272,7 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 ### Niet doen
 
 - ~~Gmail API koppeling voor nieuwsbrief-analyse~~ — nieuwsbrieven komen al via RSS binnen, geen tweede pad nodig.
-- ~~Taste als tweede feed (media-aanbevelingen via TMDB/IGDB)~~ — Smaak-tabblad is verwijderd (september 2026). Eerdere schets staat in de git-historie van dit bestand.
+- ~~Taste als tweede feed (media-aanbevelingen via TMDB/IGDB)~~ — het oude Smaak-tabblad is verwijderd (september 2026). Eerdere schets staat in de git-historie van dit bestand.
 
 ### Gedaan
 
@@ -264,4 +285,5 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 - ~~Bluesky als signaal-bron~~ — `src/lib/ingest-bluesky.ts` + `src/lib/bluesky.ts`, zelfde promote-pad als Reddit.
 - ~~Reader-mode voor niet-paywalled artikelen~~ — server-side via `@mozilla/readability` + `linkedom` in `src/lib/extract-article.ts`; HTML wordt met `sanitize-html` op een allowlist gezet (koppen, lijsten, citaten, links, afbeeldingen) en opgemaakt met `@tailwindcss/typography`.
 - ~~Losse links opslaan~~ — `/save` + bookmarklet, Android-deelmenu (PWA share target), iOS via Shortcut.
+- ~~Smaak per onderwerp (Taste-tabblad)~~ — Haiku labelt gelikete/gedislikete/bewaarde artikelen met een specifiek onderwerp; per onderwerp een automatisch of handmatig gewicht; Never filtert vóór de curator. Bewaarde artikelen tellen nu mee (zwaarder dan een like). Bron- en categoriestraf alleen nog bij ≥3 dislikes en meer dislikes dan likes.
 - ~~Likes beïnvloeden kandidaatvolgorde~~ — de score-sortering werd direct door de shuffle overschreven; nu eerst shuffle, dan stabiele sortering op score.
