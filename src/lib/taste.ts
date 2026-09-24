@@ -241,7 +241,7 @@ export async function classifyCandidates(
     .join("\n\n");
   const raw = await askJson(
     CLASSIFY_PROMPT,
-    `Categorieën:\n${categories.map((c) => `- ${c}`).join("\n") || "(geen)"}\n\nOnderwerpen:\n${weighted.map((t) => `- ${t.label}`).join("\n") || "(geen)"}\n\nArtikelen:\n${list}`,
+    `Categorieën:\n${categories.map((c) => `- ${c}`).join("\n") || "(geen: laat \"category\" weg)"}\n\nOnderwerpen:\n${weighted.map((t) => `- ${t.label}`).join("\n") || "(geen)"}\n\nArtikelen:\n${list}`,
     8000
   );
   if (!Array.isArray(raw)) return result;

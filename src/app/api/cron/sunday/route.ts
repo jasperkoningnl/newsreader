@@ -1,5 +1,4 @@
-import { generateEdition } from "@/lib/generate-edition";
-import { isSundayToday } from "@/lib/generate-sunday";
+import { generateTodaysEdition } from "@/lib/generate-sunday";
 import { db } from "@/db";
 import { editions } from "@/db/schema";
 import { desc } from "drizzle-orm";
@@ -17,11 +16,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (isSundayToday()) {
-    console.log("[cron/generate] skipped: zondag, de zondageditie draait via /api/cron/sunday");
-    return NextResponse.json({ skipped: true, reason: "sunday" });
-  }
-
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -33,15 +27,15 @@ export async function GET(req: NextRequest) {
       .limit(1);
 
     if (latest && new Date(latest.created_at ?? 0) >= todayStart) {
-      console.log(`[cron/generate] skipped: editie ${latest.id} bestaat al voor vandaag`);
+      console.log(`[cron/sunday] skipped: editie ${latest.id} bestaat al voor vandaag`);
       return NextResponse.json({ skipped: true, edition_id: latest.id });
     }
 
-    const result = await generateEdition();
-    console.log(`[cron/generate] Editie ${result.edition_id} gegenereerd met ${result.count} items`);
+    const result = await generateTodaysEdition();
+    console.log(`[cron/sunday] Editie ${result.edition_id} gegenereerd met ${result.count} items`);
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[cron/generate]", error);
+    console.error("[cron/sunday]", error);
     const message = error instanceof Error ? error.message : "Failed to generate";
     return NextResponse.json({ error: message }, { status: 500 });
   }

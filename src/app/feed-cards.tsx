@@ -1,6 +1,8 @@
 "use client";
 
-import type { EditionItem } from "./api/edition/today/route";
+import type { EditionItem, SavedThisWeek } from "./api/edition/today/route";
+import type { SundayTip } from "@/lib/generate-sunday";
+import { SavedThisWeekCard, TipCard } from "./sunday-cards";
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -219,6 +221,11 @@ function Card({
       )}
 
       <div className="absolute inset-0 story-scrim" />
+      {item.role === "longread" && (
+        <span className="absolute left-5 top-5 md:left-8 md:top-7 metadata-caps text-white/80">
+          The Sunday Edition
+        </span>
+      )}
       {item.is_paywall && (
         <span
           aria-label="Behind paywall"
@@ -230,6 +237,12 @@ function Card({
       )}
       {/* content */}
       <div className="relative mt-auto px-5 pb-5 md:px-8 md:pb-8">
+        {(item.role === "longread" || item.role === "background") && (
+          <span className="mb-3 inline-block bg-white px-2 py-1 metadata-caps text-black">
+            {item.role === "longread" ? "Longread" : "Background"}
+            {item.minutes ? ` · ${item.minutes} min` : ""}
+          </span>
+        )}
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-medium text-white/50 uppercase tracking-wide">
             {item.source}
@@ -320,11 +333,13 @@ function Card({
 function EndCard({
   createdAt,
   archived,
+  sunday,
   olderDate,
   newerDate,
 }: {
   createdAt: string | null;
   archived: boolean;
+  sunday: boolean;
   olderDate: string | null;
   newerDate: string | null;
 }) {
@@ -342,7 +357,7 @@ function EndCard({
     <div className="relative flex flex-col h-full snap-start items-center justify-center px-8 text-center bg-black md:col-span-2 md:h-56 md:rounded-xl md:snap-align-none">
       <div className="text-5xl mb-6">{archived ? "📰" : "🌿"}</div>
       <h2 className="text-2xl font-bold mb-2">
-        {archived ? "End of this edition" : "That’s it for today"}
+        {archived ? "End of this edition" : sunday ? "That’s it for this week" : "That’s it for today"}
       </h2>
       {!archived && (
         <p className="text-white/40 text-sm">Next edition {tomorrowStr}</p>
@@ -386,6 +401,9 @@ function EndCard({
 export default function FeedCards({
   items,
   createdAt,
+  kind = "daily",
+  tips = [],
+  saved = [],
   archived = false,
   olderDate = null,
   newerDate = null,
@@ -393,6 +411,9 @@ export default function FeedCards({
 }: {
   items: EditionItem[];
   createdAt: string | null;
+  kind?: "daily" | "sunday";
+  tips?: SundayTip[];
+  saved?: SavedThisWeek[];
   archived?: boolean;
   olderDate?: string | null;
   newerDate?: string | null;
@@ -445,18 +466,30 @@ export default function FeedCards({
     };
   }, [storageKey]);
 
+  // Sunday: longread and background open the edition, the tips follow, then the highlights.
+  const lead = kind === "sunday" ? items.filter((i) => i.role === "longread" || i.role === "background") : [];
+  const rest = kind === "sunday" ? items.filter((i) => i.role !== "longread" && i.role !== "background") : items;
+
   return (
     <div
       ref={feedRef}
       onScroll={() => saveScrollPosition()}
       className="h-full overflow-y-scroll snap-y snap-mandatory md:h-auto md:overflow-visible md:snap-none md:grid md:grid-cols-2 md:gap-6 md:p-6 md:bg-[#141313]"
     >
-      {items.map((item, i) => (
+      {lead.map((item, i) => (
         <Card key={item.id} item={item} index={i} feedHref={feedHref} onOpen={saveScrollPosition} />
       ))}
+      {tips.map((tip) => (
+        <TipCard key={tip.article_id} tip={tip} feedHref={feedHref} />
+      ))}
+      {rest.map((item, i) => (
+        <Card key={item.id} item={item} index={lead.length + i} feedHref={feedHref} onOpen={saveScrollPosition} />
+      ))}
+      {saved.length > 0 && <SavedThisWeekCard saved={saved} />}
       <EndCard
         createdAt={createdAt}
         archived={archived}
+        sunday={kind === "sunday"}
         olderDate={olderDate}
         newerDate={newerDate}
       />

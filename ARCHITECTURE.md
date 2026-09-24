@@ -48,16 +48,18 @@ CREATE TABLE articles (
   published_at TEXT,
   fetched_at TEXT DEFAULT (datetime('now')),
   category TEXT,               -- eerst van de bron; bij de dagelijkse run per kandidaat door Haiku bepaald (behalve local)
-  read INTEGER DEFAULT 0       -- al eerder in een feed getoond?
+  read INTEGER DEFAULT 0,      -- al eerder in een feed getoond?
+  opened_at TEXT               -- eerste keer geopend in de leesweergave (null = nooit)
 );
 ```
 
-### editions (dagelijkse feeds)
+### editions (dagelijkse feeds en zondageditie)
 ```sql
 CREATE TABLE editions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT DEFAULT (datetime('now')),
-  items_json TEXT NOT NULL      -- JSON array van geselecteerde article IDs + volgorde
+  kind TEXT NOT NULL DEFAULT 'daily',  -- 'daily' of 'sunday'
+  items_json TEXT NOT NULL      -- daily: JSON array van article IDs + motivatie; sunday: SundayPayload (src/lib/generate-sunday.ts)
 );
 ```
 
@@ -185,6 +187,22 @@ met per item een korte motivatie (1 zin) waarom dit item is gekozen.
 **Stap 4: Opslaan**
 Sla de editie op (items_json). Markeer geselecteerde artikelen als read = 1.
 
+## De zondageditie
+
+Op zondag vervangt de zondageditie de dagelijkse editie: de highlights van de week voor wie niet elke dag leest. Code: `src/lib/generate-sunday.ts`. Cron `/api/cron/sunday` om 07:00 UTC (09:00 zomertijd, 08:00 wintertijd); `/api/cron/generate` slaat zondag over. Wordt de app op zondag eerder geopend, dan maakt `/api/edition/today` hem ter plekke. Lukt de zondageditie niet (bijv. < 5 ongelezen artikelen uit de week), dan valt de dag terug op een gewone dagelijkse editie (`generateTodaysEdition`).
+
+**Aanbod:** de artikelen uit de dagelijkse edities van de afgelopen 7 dagen, zonder wat Jasper geliket, gedislikt, bewaard of geopend heeft (`articles.opened_at`, gezet door de leesweergave via `POST /api/articles/:id/open`). Never-onderwerpen gaan eruit via dezelfde Haiku-match als in de dagelijkse editie.
+
+**Opbouw:** longread, achtergrond, gametip, serietip, 6 highlights, onderaan "Saved this week" (titels van wat die week bewaard is). Max 2 per bron en max 2 paywall-items. Geselecteerde artikelen krijgen `read = 1`, zodat maandag ze niet herhaalt.
+
+**Twee calls (Claude Sonnet 5, effort medium, structured outputs):**
+1. Keuze: per onderdeel een favoriet plus reserves, met titel en beschrijving.
+2. Tips: op de volledige tekst (Readability) van maximaal 4 kandidaten per soort. Tip-kandidaten mogen ook komen uit alles wat die week binnenkwam van bronnen met categorie `games` of `series`, omdat de dagelijkse editie weinig game- en serie-items heeft.
+
+**Tips worden in code gecontroleerd** (`verifyTip`): het citaat moet letterlijk in het artikel staan, de naam ook; bij een game moet het citaat pc/Windows, Steam, Epic Games, GOG, itch.io, Humble, Android, Google Play of browser noemen (Steam Deck alleen telt niet, "download" alleen ook niet); platforms en datum blijven alleen staan als ze in het artikel staan; de tiptekst mag geen dienst, platform of jaartal noemen dat niet in het artikel staat. Valt een tip af, dan krijgt die plek een extra highlight. Afgekeurde tips staan in de `[sunday.generated]`-log (`rejected_tips`).
+
+**Kosten:** ~60 kandidaten + profiel (~15k tokens) en ~8 volledige teksten (~25k tokens), met Sonnet 5 ($2/$10 per miljoen tokens in/uit) ongeveer $0,05–0,15 per week. Werkelijk verbruik staat in `[sunday.usage.*]`.
+
 ### Kosten
 Claude Haiku: ~50 artikelen als input (~2000 tokens) + profiel (~1500 tokens) + output (~500 tokens) = ~4000 tokens per dag. Bij Haiku-prijzen is dat minder dan €0.01 per dag, ofwel minder dan €3 per jaar.
 
@@ -203,6 +221,7 @@ GET  /api/saved              — Lijst opgeslagen artikelen
 POST /api/saved              — Losse link opslaan (body: { url?, text?, title? })
 POST /api/articles/:id/like  — Like (body: { liked: true }) of dislike (body: { liked: false })
 POST /api/articles/:id/save  — Artikel uit de feed opslaan
+POST /api/articles/:id/open  — Leesweergave geopend (zet opened_at, alleen de eerste keer)
 
 PUT  /api/topics/:id          — Smaak-gewicht zetten (body: { weight: -2..2 | null }, null = automatisch)
 PUT  /api/category-mix/:cat   — Mix voor een categorie zetten (body: { min, max })
@@ -269,7 +288,7 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 ### Korte termijn (volgorde gedreven door afhankelijkheid)
 
 1. **Feedback per editie zichtbaar maken** — het Taste-tabblad toont nu de stand per onderwerp; per editie tonen welke items door smaak zijn weggefilterd of voorrang kregen staat alleen nog in de `[edition.generated]`-log (`taste.removed`).
-2. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
+2. **Zondageditie per mail** — de zondageditie staat in de app (zie **De zondageditie**); een mail-preview met link ernaar is nog niet gebouwd.
 
 ### Verder weg
 
@@ -293,6 +312,7 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 - ~~Reddit API koppeling voor profiel-signalen~~ — ingest via GitHub Actions (`.github/workflows/reddit-ingest.yml` + `src/lib/ingest-reddit.ts`), gepromoot naar de candidate-pool via `src/lib/promote-signals.ts`.
 - ~~Bluesky als signaal-bron~~ — `src/lib/ingest-bluesky.ts` + `src/lib/bluesky.ts`, zelfde promote-pad als Reddit.
 - ~~Reader-mode voor niet-paywalled artikelen~~ — server-side via `@mozilla/readability` + `linkedom` in `src/lib/extract-article.ts`; HTML wordt met `sanitize-html` op een allowlist gezet (koppen, lijsten, citaten, links, afbeeldingen) en opgemaakt met `@tailwindcss/typography`.
+- ~~Wekelijkse digest~~ — gebouwd als zondageditie in de Feed, zie **De zondageditie**.
 - ~~Losse links opslaan~~ — `/save` + bookmarklet, Android-deelmenu (PWA share target), iOS via Shortcut.
 - ~~Categorie-mix instelbaar~~ — min/max per categorie op het Taste-tabblad (`category_mix`), hard afgedwongen in `enforceConstraints`; vervangt de vaste mix in de curator-prompt, de "max 3 per categorie"-regel, de losse NL-regel (nu min van `local`) en de cijfers in `profile.md`. De regels worden nu over de uiteindelijke 10 items gecontroleerd (eerder over 15, waarna afkappen een afgedwongen item kon laten wegvallen).
 - ~~Smaak per onderwerp (Taste-tabblad)~~ — Haiku labelt gelikete/gedislikete/bewaarde artikelen met een specifiek onderwerp; per onderwerp een automatisch of handmatig gewicht; Never filtert vóór de curator. Bewaarde artikelen tellen nu mee (zwaarder dan een like). Bron- en categoriestraf alleen nog bij ≥3 dislikes en meer dislikes dan likes.

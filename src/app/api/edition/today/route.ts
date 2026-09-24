@@ -6,7 +6,7 @@ import { requireInternalToken } from "@/lib/api-auth";
 import { cleanHtmlText } from "@/lib/html-text";
 
 export const maxDuration = 300;
-import { generateEdition } from "@/lib/generate-edition";
+import { generateTodaysEdition, type SundayPayload, type SundayRole, type SundayTip } from "@/lib/generate-sunday";
 import { fetchAllFeeds } from "@/lib/fetch-feeds";
 
 export type EditionItem = {
@@ -24,12 +24,19 @@ export type EditionItem = {
   saved: boolean;
   is_paywall: boolean;
   signal_score: number;
+  role: SundayRole | null;
+  minutes: number | null;
 };
+
+export type SavedThisWeek = { id: number; title: string; source: string };
 
 export type TodayEdition = {
   id: number;
   created_at: string | null;
+  kind: "daily" | "sunday";
   items: EditionItem[];
+  tips: SundayTip[];
+  saved: SavedThisWeek[];
 };
 
 export async function GET(req: NextRequest) {
@@ -84,7 +91,7 @@ export async function getOrGenerateToday(force = false): Promise<TodayEdition> {
     await fetchAllFeeds();
   }
 
-  const { edition_id } = await generateEdition();
+  const { edition_id } = await generateTodaysEdition();
   const [newEdition] = await db
     .select()
     .from(editions)
@@ -93,7 +100,9 @@ export async function getOrGenerateToday(force = false): Promise<TodayEdition> {
 }
 
 async function buildEdition(edition: typeof editions.$inferSelect): Promise<TodayEdition> {
-  const parsed: { id: number; motivatie: string }[] = JSON.parse(edition.items_json);
+  const sunday: SundayPayload | null = edition.kind === "sunday" ? JSON.parse(edition.items_json) : null;
+  const parsed: { id: number; motivatie: string; role?: SundayRole; minutes?: number | null }[] =
+    sunday ? sunday.items : JSON.parse(edition.items_json);
   const ids = parsed.map((p) => p.id);
 
   const rows = await db
@@ -146,12 +155,34 @@ async function buildEdition(edition: typeof editions.$inferSelect): Promise<Toda
             saved: Boolean(a.saved),
             is_paywall: a.is_paywall === 1,
             signal_score: a.signal_score ?? 0,
+            role: p.role ?? null,
+            minutes: p.minutes ?? null,
           }
         : null;
     })
     .filter((x): x is EditionItem => x !== null);
 
-  return { id: edition.id, created_at: edition.created_at, items };
+  const savedIds = sunday?.saved_ids ?? [];
+  const savedRows = savedIds.length
+    ? await db
+        .select({ id: articles.id, title: articles.title, source: sources.name })
+        .from(articles)
+        .innerJoin(sources, eq(articles.source_id, sources.id))
+        .where(inArray(articles.id, savedIds))
+    : [];
+  const saved = savedIds
+    .map((id) => savedRows.find((r) => r.id === id))
+    .filter((r): r is SavedThisWeek => r !== undefined)
+    .map((r) => ({ ...r, title: cleanHtmlText(r.title) }));
+
+  return {
+    id: edition.id,
+    created_at: edition.created_at,
+    kind: sunday ? "sunday" : "daily",
+    items,
+    tips: sunday?.tips ?? [],
+    saved,
+  };
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

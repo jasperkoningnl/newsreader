@@ -1,4 +1,4 @@
-import { generateEdition } from "@/lib/generate-edition";
+import { generateTodaysEdition } from "@/lib/generate-sunday";
 import { NextRequest, NextResponse } from "next/server";
 import { requireSameOriginOrInternalToken } from "@/lib/api-auth";
 
@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const unauthorized = requireSameOriginOrInternalToken(req);
   if (unauthorized) return unauthorized;
   try {
-    const result = await generateEdition();
+    const result = await generateTodaysEdition();
     return NextResponse.json(result);
   } catch (error) {
     console.error("POST /api/edition/generate:", error);
