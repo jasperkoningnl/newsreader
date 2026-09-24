@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { after, NextRequest, NextResponse } from "next/server";
 import { requireSameOrigin } from "@/lib/api-auth";
 import { labelInBackground } from "@/lib/taste";
+import { normalizeCategory } from "@/lib/category-mix";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const unauthorized = requireSameOrigin(req);
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Article not found" }, { status: 404 });
     }
 
-    const topic = String(article.category ?? "other").toLowerCase().trim() || "other";
+    const topic = normalizeCategory(article.category);
     await db.delete(article_likes).where(eq(article_likes.article_id, articleId));
 
     const [created] = await db

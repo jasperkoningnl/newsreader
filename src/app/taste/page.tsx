@@ -48,7 +48,7 @@ export default async function TastePage() {
       <section className="mt-10">
         <h2 className="metadata-caps text-white/70">Mix per category</h2>
         <MixList initial={mixRows} />
-        <p className="mt-3 text-sm text-white/40">A category is the category of the source, set on the Sources page.</p>
+        <p className="mt-3 text-sm text-white/40">Each article gets a category from its content. Local stays with the source, as set on the Sources page. Categories with a minimum above 0 are expected; the daily surprise comes from the others.</p>
       </section>
 
       {unlabeled > 0 && (

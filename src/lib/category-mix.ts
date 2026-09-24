@@ -29,8 +29,13 @@ const DEFAULTS: Record<string, [number, number]> = {
 };
 const OTHER_DEFAULT: [number, number] = [0, 2];
 
+export const LOCAL_CATEGORY = "local";
+export const OTHER_CATEGORY = "other";
+
+// Sources created by the Reddit/Bluesky promotion have no category; older seed data used "overig".
 export function normalizeCategory(raw: string | null | undefined): string {
-  return (raw ?? "").toLowerCase().trim() || "overig";
+  const category = (raw ?? "").toLowerCase().trim();
+  return !category || category === "overig" ? OTHER_CATEGORY : category;
 }
 
 export function defaultMix(category: string): [number, number] {

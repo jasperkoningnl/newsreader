@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { article_likes, articles, saved_articles, sources, topics } from "@/db/schema";
 import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { cleanHtmlText } from "./html-text";
+import { normalizeCategory } from "./category-mix";
 
 const client = new Anthropic();
 const MODEL = "claude-haiku-4-5";
@@ -210,34 +211,51 @@ export async function fetchTopicStates(): Promise<TopicState[]> {
   });
 }
 
-const MATCH_PROMPT = `Je krijgt een lijst onderwerpen en een lijst kandidaat-artikelen voor een persoonlijke nieuwsfeed.
-Geef per artikel het onderwerp waar het DUIDELIJK onder valt, op het specifieke niveau van dat onderwerp.
+const CLASSIFY_PROMPT = `Je krijgt kandidaat-artikelen voor een persoonlijke nieuwsfeed, een lijst categorieën en een lijst onderwerpen.
+Geef per artikel:
 
-- "Apple: iPhone- en iOS-productnieuws" omvat een iPhone-review of een iOS-update, maar niet een rechtszaak tegen Apple en niet een serie op Apple TV+.
-- Twijfel je, of past geen onderwerp: laat het artikel weg.
-- Gebruik de onderwerpen letterlijk zoals gegeven.
+1. "category": de categorie waar het artikel inhoudelijk onder valt, ongeacht de bron. Een recensie van een serie op een techsite is "series", niet "tech".
+   - Kies uitsluitend uit de gegeven categorieën, letterlijk.
+   - "news" is algemeen actueel nieuws. Kies een specifiekere categorie alleen als het stuk daar duidelijk over gaat.
+2. "topic" (alleen als het past): het onderwerp waar het artikel DUIDELIJK onder valt, op het specifieke niveau van dat onderwerp.
+   - "Apple: iPhone- en iOS-productnieuws" omvat een iPhone-review of een iOS-update, maar niet een rechtszaak tegen Apple en niet een serie op Apple TV+.
+   - Twijfel je, of past geen onderwerp: laat "topic" weg.
+   - Gebruik de onderwerpen letterlijk zoals gegeven.
 
-Antwoord uitsluitend met een JSON-array van alleen de artikelen die ergens onder vallen: [{"id": <artikel-id>, "topic": "<onderwerp>"}, ...]. Geen match gevonden: [].`;
+Antwoord uitsluitend met een JSON-array met precies één regel per artikel: [{"id": <artikel-id>, "category": "<categorie>", "topic": "<onderwerp>"}, ...].`;
 
-export async function matchCandidateTopics(
+export type CandidateClassification = { topics: Map<number, TopicState>; categories: Map<number, string> };
+
+export async function classifyCandidates(
   candidates: { id: number; title: string; description: string | null; source: string }[],
-  weighted: TopicState[]
-): Promise<Map<number, TopicState>> {
-  const result = new Map<number, TopicState>();
-  if (!candidates.length || !weighted.length) return result;
+  weighted: TopicState[],
+  categories: string[]
+): Promise<CandidateClassification> {
+  const result: CandidateClassification = { topics: new Map(), categories: new Map() };
+  if (!candidates.length || (!weighted.length && !categories.length)) return result;
 
   const byLabel = new Map(weighted.map((t) => [t.label.toLowerCase(), t]));
+  const allowed = new Set(categories);
   const list = candidates
     .map((c) => `ID ${c.id} | ${c.source} | ${c.title}\n  ${c.description?.slice(0, 200) ?? "(geen beschrijving)"}`)
     .join("\n\n");
-  const pairs = parsePairs(
-    await askJson(MATCH_PROMPT, `Onderwerpen:\n${weighted.map((t) => `- ${t.label}`).join("\n")}\n\nArtikelen:\n${list}`, 4000)
+  const raw = await askJson(
+    CLASSIFY_PROMPT,
+    `Categorieën:\n${categories.map((c) => `- ${c}`).join("\n") || "(geen)"}\n\nOnderwerpen:\n${weighted.map((t) => `- ${t.label}`).join("\n") || "(geen)"}\n\nArtikelen:\n${list}`,
+    8000
   );
+  if (!Array.isArray(raw)) return result;
 
   const ids = new Set(candidates.map((c) => c.id));
-  for (const { id, topic } of pairs) {
-    const state = byLabel.get(normalizeLabel(topic).toLowerCase());
-    if (state && ids.has(id)) result.set(id, state);
+  for (const r of raw) {
+    if (typeof r !== "object" || r === null) continue;
+    const { id, category, topic } = r as { id?: unknown; category?: unknown; topic?: unknown };
+    if (typeof id !== "number" || !ids.has(id)) continue;
+    if (typeof category === "string" && allowed.has(category.toLowerCase().trim())) {
+      result.categories.set(id, category.toLowerCase().trim());
+    }
+    const state = typeof topic === "string" ? byLabel.get(normalizeLabel(topic).toLowerCase()) : undefined;
+    if (state) result.topics.set(id, state);
   }
   return result;
 }
@@ -261,7 +279,7 @@ export async function fetchPreferenceContext(): Promise<PreferenceContext> {
     const liked = row.liked !== 0;
     const source = (row.source ?? "").trim();
     if (source) add(counts.src, source, liked);
-    add(counts.top, String(row.topic ?? "overig").toLowerCase().trim() || "overig", liked);
+    add(counts.top, normalizeCategory(row.topic), liked);
   }
 
   // Source and category are coarse: only act on them when the balance is clearly one-sided,
