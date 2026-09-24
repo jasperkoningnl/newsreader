@@ -23,6 +23,10 @@ const CALL_TO_ACTION = new RegExp(
   "i"
 );
 
+const AUTHOR_BIO =
+  /^([A-Z][\p{L}'.-]+ ){1,3}(is|was) (a|an|the|our)\b.{0,160}\b(writer|reporter|editor|journalist|critic|correspondent|contributor|columnist|author|freelancer|host|redacteur|verslaggever)s?\b/u;
+const AUTHOR_BIO_TAIL_BLOCKS = 3;
+
 const SMALL_IMAGE_PX = 200;
 const LOOSE_IMAGE_MIN_PX = 600;
 const IMAGE_HINT = /(avatar|author|headshot|profile|logo|icon|badge|sprite|placeholder)/i;
@@ -117,6 +121,13 @@ export function cleanArticleContent(html: string, heroImageUrl: string | null): 
       return links.length > 0 && links.map(text).join(" ") === text(li);
     });
     if (allLinks) list.remove();
+  }
+
+  // Author bios ("Jane Doe is a movie and TV writer at …") sit at the very end of the piece.
+  const tail = Array.from(document.querySelectorAll("p")).slice(-AUTHOR_BIO_TAIL_BLOCKS);
+  for (const p of tail) {
+    const t = text(p);
+    if (t.length < 400 && AUTHOR_BIO.test(t)) p.remove();
   }
 
   return document.body.innerHTML;
