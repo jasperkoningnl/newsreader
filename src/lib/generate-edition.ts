@@ -7,6 +7,7 @@ import { join } from "path";
 import { detectPaywall } from "./paywall-detect";
 import { promoteSignalsToArticles } from "./promote-signals";
 import { cleanHtmlText } from "./html-text";
+import { EDITION_SIZE, fetchCategoryMix, mixLookup, normalizeCategory, type MixRow } from "./category-mix";
 import { fetchPreferenceContext, fetchTopicStates, labelPendingArticles, matchCandidateTopics, type PreferenceContext } from "./taste";
 
 const client = new Anthropic();
@@ -63,7 +64,6 @@ async function detectPaywallBatch(
   await Promise.all(workers);
   return result;
 }
-const NL_CATEGORY = "local";
 const BREAKING_WORDS = ["breaking", "live", "zojuist", "net binnen", "urgent", "ontwikkelt", "update"];
 const LONGREAD_WORDS = ["analyse", "essay", "longread", "interview", "achtergrond", "dossier"];
 const EXPECTED_CATEGORIES = new Set(["tech", "nieuws", "series", "sport", "games", "wetenschap", "cultuur", "local"]);
@@ -85,7 +85,25 @@ async function fetchFeedbackExamples(): Promise<string> {
   return `\nRecent beoordeelde artikelen (✓ = like, ✗ = minder hiervan). Gebruik dit om te zien welk soort stuk Jasper wel/niet wil, niet alleen welke bron:\n${lines.join("\n")}\n`;
 }
 
-async function runCurator(candidates: Candidate[], profile: string, feedbackExamples: string, pref: PreferenceContext): Promise<CuratorItem[]> {
+function mixPrompt(candidates: Candidate[], mixRows: MixRow[]): string {
+  const present = new Set(candidates.map((c) => normalizeCategory(c.category)));
+  const mix = mixLookup(mixRows);
+  return [...new Set([...mixRows.filter((r) => r.min > 0).map((r) => r.category), ...present])]
+    .sort()
+    .map((cat) => {
+      const { min, max } = mix(cat);
+      return `- ${cat}: ${min === max ? min : `${min}-${max}`}${cat === "local" ? " (Nederlandstalig)" : ""}`;
+    })
+    .join("\n");
+}
+
+async function runCurator(
+  candidates: Candidate[],
+  profile: string,
+  feedbackExamples: string,
+  pref: PreferenceContext,
+  mixRows: MixRow[]
+): Promise<CuratorItem[]> {
   const list = candidates
     .map((a) => {
       const signal = a.signal_score > 0 ? ` | signaal=${a.signal_score.toFixed(1)}` : "";
@@ -108,8 +126,7 @@ wordt bewust gebruikt om na constraint-enforcement een gevarieerdere top-10 over
 
 HARDE REGELS (verplicht, geen uitzonderingen):
 - Maximaal ${SOURCE_LIMIT} items van dezelfde bron (bijv. max ${SOURCE_LIMIT} van "The Verge")
-- Maximaal 3 items uit dezelfde categorie
-- Altijd minstens 1 Nederlandstalig item (categorie: local)
+- Per categorie minimaal en maximaal het aantal uit MIX PER CATEGORIE hieronder (geldt voor de uiteindelijke ${EDITION_SIZE} items)
 - Minstens 1 longread (schat in op basis van titel/beschrijving)
 - Maximaal 2 breaking-news items; de rest moet een dag later nog leesbaar zijn
 - Maximaal ${PAYWALL_LIMIT} items achter een paywall (gemarkeerd met "(paywall)")
@@ -127,13 +144,8 @@ SMAAK (per onderwerp, afgeleid uit Jasper's likes, dislikes en bewaarde artikele
 - "smaak=-1": kies alleen als het stuk echt uitzonderlijk is.
 - Items zonder smaak-markering zijn neutraal, niet slechter.
 
-GEWENSTE MIX:
-- 2-3 tech/AI (waarvan max 1 van dezelfde tech-bron)
-- 1-2 serie/film/streaming
-- 1-2 nieuws of geopolitiek (analyse, geen breaking)
-- 1 sport of games
-- 1 wetenschap of cultuur
-- 1 verrassing
+MIX PER CATEGORIE (min-max items van de ${EDITION_SIZE}, ingesteld door Jasper):
+${mixPrompt(candidates, mixRows)}
 
 Antwoord uitsluitend als geldig JSON array (geen markdown, geen tekst erbuiten):
 [{"id": <number>, "motivatie": "<één zin waarom dit item"}, ...]`;
@@ -192,147 +204,124 @@ function isSurprise(item: Candidate): boolean {
   return !EXPECTED_CATEGORIES.has(cat);
 }
 
-function isLocal(item: Candidate): boolean {
-  return (item.category ?? "").toLowerCase() === NL_CATEGORY;
-}
-
-function meetsGlobalRules(items: Candidate[]): boolean {
-  const hasNl = items.some(isLocal);
-  const hasLongread = items.some(isLongread);
-  const breakingCount = items.filter(isBreaking).length;
-  const paywallCount = items.filter((c) => c.is_paywall).length;
-  const hasSurprise = items.some(isSurprise);
-  return hasNl && hasLongread && breakingCount <= 2 && paywallCount <= PAYWALL_LIMIT && hasSurprise;
-}
-
-function getConstraintViolations(items: Candidate[]): string[] {
+function getConstraintViolations(items: Candidate[], mixRows: MixRow[]): string[] {
+  const mix = mixLookup(mixRows);
   const violations: string[] = [];
-  const sourceCounts = items.reduce<Record<string, number>>((acc, i) => {
-    acc[i.source] = (acc[i.source] ?? 0) + 1;
-    return acc;
-  }, {});
-  const categoryCounts = items.reduce<Record<string, number>>((acc, i) => {
-    const cat = (i.category ?? "overig").toLowerCase();
-    acc[cat] = (acc[cat] ?? 0) + 1;
-    return acc;
-  }, {});
+  const count = (pred: (c: Candidate) => boolean) => items.filter(pred).length;
+  const sources = new Set(items.map((c) => c.source));
+  const categories = new Set([...items.map((c) => normalizeCategory(c.category)), ...mixRows.map((r) => r.category)]);
 
-  if (!items.some(isLocal)) violations.push("missing_nl_item");
   if (!items.some(isLongread)) violations.push("missing_longread");
   if (!items.some(isSurprise)) violations.push("missing_surprise");
-  if (items.filter(isBreaking).length > 2) violations.push("too_many_breaking");
-  if (Object.values(sourceCounts).some((n) => n > SOURCE_LIMIT)) violations.push("source_limit_exceeded");
-  if (Object.values(categoryCounts).some((n) => n > 3)) violations.push("category_limit_exceeded");
-  if (items.filter((c) => c.is_paywall).length > PAYWALL_LIMIT) violations.push("paywall_limit_exceeded");
+  if (count(isBreaking) > 2) violations.push("too_many_breaking");
+  if ([...sources].some((src) => count((c) => c.source === src) > SOURCE_LIMIT)) violations.push("source_limit_exceeded");
+  for (const cat of categories) {
+    const n = count((c) => normalizeCategory(c.category) === cat);
+    if (n > mix(cat).max) violations.push(`category_max_exceeded:${cat}`);
+    if (n < mix(cat).min) violations.push(`category_min_missing:${cat}`);
+  }
+  if (count((c) => c.is_paywall) > PAYWALL_LIMIT) violations.push("paywall_limit_exceeded");
   return violations;
 }
 
-function enforceConstraints(selected: CuratorItem[], candidates: Candidate[]): { items: CuratorItem[]; violations: string[] } {
+function enforceConstraints(
+  selected: CuratorItem[],
+  candidates: Candidate[],
+  mixRows: MixRow[]
+): { items: CuratorItem[]; violations: string[] } {
+  const mix = mixLookup(mixRows);
   const byId = Object.fromEntries(candidates.map((c) => [c.id, c]));
   const curatedById = Object.fromEntries(selected.map((s) => [s.id, s]));
+  const result: Candidate[] = [];
+  const motivations = new Map<number, string>();
 
-  const sourceCounts: Record<string, number> = {};
-  const categoryCounts: Record<string, number> = {};
-  const result: CuratorItem[] = [];
+  const countIn = (items: Candidate[], pred: (c: Candidate) => boolean) => items.filter(pred).length;
+  const sameCat = (cat: string) => (c: Candidate) => normalizeCategory(c.category) === cat;
 
-  const canAdd = (c: Candidate, current: Candidate[]) => {
-    const sourceCount = sourceCounts[c.source] ?? 0;
-    if (sourceCount >= SOURCE_LIMIT) return false;
-    const cat = (c.category ?? "overig").toLowerCase();
-    const catCount = categoryCounts[cat] ?? 0;
-    if (catCount >= 3) return false;
-    const breakingCount = current.filter(isBreaking).length;
-    if (isBreaking(c) && breakingCount >= 2) return false;
-    const paywallCount = current.filter((x) => x.is_paywall).length;
-    if (c.is_paywall && paywallCount >= PAYWALL_LIMIT) return false;
-    if (c.topic && current.filter((x) => x.topic === c.topic).length >= TOPIC_LIMIT) return false;
+  const fits = (items: Candidate[], c: Candidate, relaxCategoryMax = false) => {
+    if (countIn(items, (x) => x.source === c.source) > SOURCE_LIMIT) return false;
+    const cat = normalizeCategory(c.category);
+    if (!relaxCategoryMax && countIn(items, sameCat(cat)) > mix(cat).max) return false;
+    if (countIn(items, isBreaking) > 2) return false;
+    if (countIn(items, (x) => x.is_paywall) > PAYWALL_LIMIT) return false;
+    if (c.topic && countIn(items, (x) => x.topic === c.topic) > TOPIC_LIMIT) return false;
     return true;
   };
-
-  const add = (c: Candidate) => {
-    const cat = (c.category ?? "overig").toLowerCase();
-    sourceCounts[c.source] = (sourceCounts[c.source] ?? 0) + 1;
-    categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
-    result.push(curatedById[c.id] ?? { id: c.id, motivatie: "Toegevoegd om aan mixregels te voldoen." });
+  const canAdd = (c: Candidate, relaxCategoryMax = false) =>
+    !result.includes(c) && fits([...result, c], c, relaxCategoryMax);
+  const add = (c: Candidate, motivatie: string) => {
+    result.push(c);
+    motivations.set(c.id, curatedById[c.id]?.motivatie ?? motivatie);
   };
 
   for (const item of selected) {
-    const c = byId[item.id];
-    if (!c) continue;
-    const currentCandidates = result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
-    if (canAdd(c, currentCandidates)) add(c);
-  }
-
-  const available = candidates.filter((c) => !result.some((r) => r.id === c.id));
-  for (const c of available) {
     if (result.length >= EDITION_SIZE) break;
-    const currentCandidates = result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
-    if (canAdd(c, currentCandidates)) add(c);
+    const c = byId[item.id];
+    if (c && canAdd(c)) add(c, "");
+  }
+  for (const c of candidates) {
+    if (result.length >= EDITION_SIZE) break;
+    if (canAdd(c)) add(c, "Toegevoegd om aan mixregels te voldoen.");
+  }
+  // Too few candidates to fill the edition within the category maxima: better a full edition than a short one.
+  let relaxed = false;
+  for (const c of candidates) {
+    if (result.length >= EDITION_SIZE) break;
+    if (canAdd(c, true)) {
+      add(c, "Toegevoegd om de editie te vullen.");
+      relaxed = true;
+    }
   }
 
-  const asCandidates = () => result.map((r) => byId[r.id]).filter((x): x is Candidate => !!x);
-
-  const ensureRule = (predicate: (c: Candidate) => boolean, motivatie: string) => {
-    const before = asCandidates();
-    if (before.some(predicate)) return;
-
-    const newItem = candidates.find((c) => predicate(c) && !result.some((r) => r.id === c.id));
+  const ensure = (predicate: (c: Candidate) => boolean, need: number, motivatie: string) => {
+    if (countIn(result, predicate) >= need) return;
+    const newItem = candidates.find((c) => predicate(c) && !result.includes(c));
     if (!newItem) return;
 
-    if (result.length < EDITION_SIZE && canAdd(newItem, before)) {
-      add(newItem);
+    if (result.length < EDITION_SIZE && canAdd(newItem)) {
+      add(newItem, motivatie);
       return;
     }
 
-    const protect: Array<(items: Candidate[]) => boolean> = [];
-    if (predicate !== isLocal && before.some(isLocal)) protect.push((it) => it.some(isLocal));
-    if (predicate !== isLongread && before.some(isLongread)) protect.push((it) => it.some(isLongread));
-    if (predicate !== isSurprise && before.some(isSurprise)) protect.push((it) => it.some(isSurprise));
+    const kept: Array<(items: Candidate[]) => boolean> = [];
+    if (result.some(isLongread)) kept.push((it) => it.some(isLongread));
+    if (result.some(isSurprise)) kept.push((it) => it.some(isSurprise));
+    for (const row of mixRows) {
+      if (row.min > 0 && countIn(result, sameCat(row.category)) >= row.min) {
+        kept.push((it) => countIn(it, sameCat(row.category)) >= row.min);
+      }
+    }
 
-    for (let i = 0; i < result.length; i++) {
-      const removed = byId[result[i].id];
-      if (!removed) continue;
-      const without = before.filter((_, idx) => idx !== i);
-      const withNew = [...without, newItem];
-
-      if (!protect.every((rule) => rule(withNew))) continue;
-
-      const newCat = (newItem.category ?? "overig").toLowerCase();
-      const okSource = withNew.filter((c) => c.source === newItem.source).length <= SOURCE_LIMIT;
-      const okCat = withNew.filter((c) => (c.category ?? "overig").toLowerCase() === newCat).length <= 3;
-      const okBreaking = withNew.filter(isBreaking).length <= 2;
-      const okPaywall = withNew.filter((c) => c.is_paywall).length <= PAYWALL_LIMIT;
-      const okTopic = !newItem.topic || withNew.filter((c) => c.topic === newItem.topic).length <= TOPIC_LIMIT;
-      if (!okSource || !okCat || !okBreaking || !okPaywall || !okTopic) continue;
-
-      const removedCat = (removed.category ?? "overig").toLowerCase();
-      sourceCounts[removed.source] = (sourceCounts[removed.source] ?? 0) - 1;
-      categoryCounts[removedCat] = (categoryCounts[removedCat] ?? 0) - 1;
-      sourceCounts[newItem.source] = (sourceCounts[newItem.source] ?? 0) + 1;
-      categoryCounts[newCat] = (categoryCounts[newCat] ?? 0) + 1;
-      result[i] = curatedById[newItem.id] ?? { id: newItem.id, motivatie };
+    // Replace from the bottom up: the curator's lowest-ranked picks go first.
+    for (let i = result.length - 1; i >= 0; i--) {
+      if (predicate(result[i])) continue;
+      const swapped = result.map((c, idx) => (idx === i ? newItem : c));
+      if (!kept.every((rule) => rule(swapped)) || !fits(swapped, newItem)) continue;
+      motivations.delete(result[i].id);
+      result[i] = newItem;
+      motivations.set(newItem.id, curatedById[newItem.id]?.motivatie ?? motivatie);
       return;
     }
   };
 
-  ensureRule(isLocal, "Toegevoegd voor NL-item (categorie local).");
-  ensureRule(isLongread, "Toegevoegd om aan de longread-regel te voldoen.");
-  ensureRule(isSurprise, "Toegevoegd als verrassingsitem buiten de verwachte categorieën.");
+  for (const row of mixRows.filter((r) => r.min > 0)) {
+    for (let need = 1; need <= row.min; need++) {
+      ensure(sameCat(row.category), need, `Toegevoegd voor de mix (${row.category}).`);
+    }
+  }
+  ensure(isLongread, 1, "Toegevoegd om aan de longread-regel te voldoen.");
+  ensure(isSurprise, 1, "Toegevoegd als verrassingsitem buiten de verwachte categorieën.");
 
-  const final = asCandidates();
-  const violations = getConstraintViolations(final);
-  if (violations.length > 0 || !meetsGlobalRules(final)) {
+  const violations = getConstraintViolations(result, mixRows);
+  if (relaxed) violations.push("category_max_relaxed_to_fill");
+  if (violations.length > 0) {
     console.warn("[edition.constraints] not_fully_satisfied", { violations });
   }
 
-  return { items: result, violations };
+  return { items: result.map((c) => ({ id: c.id, motivatie: motivations.get(c.id) ?? "" })), violations };
 }
 
 const MAX_PER_SOURCE = SOURCE_LIMIT;
-// Productkeuze: de dagelijkse editie toont 10 items.
-// We vragen de curator om 15 suggesties en knippen daarna terug naar 10,
-// zodat we na hard constraint-enforcement (mix/diversiteit) nog genoeg variatie overhouden.
-const EDITION_SIZE = 10;
 
 type TasteLog = { labeled: number; weighted_topics: number; matched: number; removed: { topic: string; title: string }[] };
 
@@ -436,6 +425,7 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
     );
   }
   const pref = await fetchPreferenceContext();
+  const mixRows = await fetchCategoryMix();
   const tasteLog = await applyTopicTaste(candidates);
   const score = (c: Candidate) => {
     const cat = String(c.category ?? "overig").toLowerCase();
@@ -471,8 +461,8 @@ export async function generateEdition(): Promise<{ edition_id: number; count: nu
 
   const profile = readFileSync(join(process.cwd(), "profile.md"), "utf-8");
   const feedbackExamples = await fetchFeedbackExamples();
-  const raw = await runCurator(candidates, profile, feedbackExamples, pref);
-  const constrained = enforceConstraints(raw, candidates);
+  const raw = await runCurator(candidates, profile, feedbackExamples, pref, mixRows);
+  const constrained = enforceConstraints(raw, candidates, mixRows);
   const selected = constrained.items.slice(0, EDITION_SIZE);
 
   if (!selected.length) throw new Error("Curator selecteerde geen artikelen na constraints");

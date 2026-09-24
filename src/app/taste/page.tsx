@@ -1,11 +1,18 @@
 import { after } from "next/server";
 import { countUnlabeled, fetchPreferenceContext, fetchTopicStates, labelPendingArticles } from "@/lib/taste";
+import { fetchCategoryMix } from "@/lib/category-mix";
+import MixList from "./mix-list";
 import TopicList from "./topic-list";
 
 export const dynamic = "force-dynamic";
 
 export default async function TastePage() {
-  const [topicStates, unlabeled, pref] = await Promise.all([fetchTopicStates(), countUnlabeled(), fetchPreferenceContext()]);
+  const [mixRows, topicStates, unlabeled, pref] = await Promise.all([
+    fetchCategoryMix(),
+    fetchTopicStates(),
+    countUnlabeled(),
+    fetchPreferenceContext(),
+  ]);
 
   if (unlabeled > 0) {
     after(async () => {
@@ -35,9 +42,14 @@ export default async function TastePage() {
     <div className="mx-auto max-w-6xl px-5 py-8 md:px-10 md:py-14">
       <h1 className="text-5xl font-bold tracking-[-0.03em]">Taste</h1>
       <p className="mt-3 max-w-2xl text-white/60">
-        Topics are picked up from what you like, save and thumb down. They set themselves; move a slider to take over.
-        Never keeps a topic out of the feed. The daily mix stays in charge, so no topic can take over the edition.
+        The mix sets how many items each category gets in the edition of 10. Within that mix, topics decide what gets picked.
       </p>
+
+      <section className="mt-10">
+        <h2 className="metadata-caps text-white/70">Mix per category</h2>
+        <MixList initial={mixRows} />
+        <p className="mt-3 text-sm text-white/40">A category is the category of the source, set on the Sources page.</p>
+      </section>
 
       {unlabeled > 0 && (
         <p className="mt-6 text-white/60">
@@ -45,8 +57,11 @@ export default async function TastePage() {
         </p>
       )}
 
-      <section className="mt-10">
+      <section className="mt-14">
         <h2 className="metadata-caps text-white/70">Topics</h2>
+        <p className="mt-2 text-sm text-white/50">
+          Picked up from what you like, save and thumb down. They set themselves; move a slider to take over. Never keeps a topic out of the feed.
+        </p>
         {sorted.length ? (
           <TopicList topics={sorted} />
         ) : (

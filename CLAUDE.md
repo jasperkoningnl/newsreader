@@ -58,7 +58,7 @@ Zet in `.env.local` voor lokale ontwikkeling (staat in `.gitignore`).
 
 ## Database
 
-Schema: `sources`, `articles`, `editions`, `article_likes`, `saved_articles`, `link_signals`, `topics` — zie `src/db/schema.ts` en `ARCHITECTURE.md`.
+Schema: `sources`, `articles`, `editions`, `article_likes`, `saved_articles`, `link_signals`, `topics`, `category_mix` — zie `src/db/schema.ts` en `ARCHITECTURE.md`.
 
 Migraties aanmaken:
 
