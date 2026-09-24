@@ -1,7 +1,7 @@
 import { parseHTML } from "linkedom";
 
 const CLUTTER_TOKEN =
-  /(^|[-_])(newsletters?|subscribe|subscription|signup|sign-up|share|sharing|social|related|recommended|recommendations|promo|promos|sponsored|advert|advertisement|ad|ads|avatar|author-bio|follow|comments?|popular|most-read|read-more|more-from|outbrain|taboola|toast|tooltip|clipboard|cta|paywall|recirc|recirculation)([-_]|$)/i;
+  /(^|[-_])(newsletters?|subscribe|subscription|signup|sign-up|share|sharing|social|related|recommended|recommendations|promo|promos|sponsored|advert|advertisement|ad|ads|avatar|author-bio|author-box|author-info|author-card|author-details|author-description|about-author|about-the-author|follow|comments?|popular|most-read|read-more|more-from|outbrain|taboola|toast|tooltip|clipboard|cta|paywall|recirc|recirculation)([-_]|$)/i;
 
 const CLUTTER_LABEL =
   /^(follow|following|share|copy link|sign up|sign in|subscribe|advertisement|ad|read more|related|recommended|more from|most popular|see more|see all|continue reading)\b/i;
@@ -23,8 +23,10 @@ const CALL_TO_ACTION = new RegExp(
   "i"
 );
 
-const AUTHOR_BIO =
-  /^([A-Z][\p{L}'.-]+ ){1,3}(is|was) (a|an|the|our)\b.{0,160}\b(writer|reporter|editor|journalist|critic|correspondent|contributor|columnist|author|freelancer|host|redacteur|verslaggever)s?\b/u;
+const AUTHOR_BIO_OPENING = /^([A-Z][\p{L}'.-]+ ){1,3}(is|was) (a|an|the|our)\b/u;
+const AUTHOR_ROLE =
+  /\b(writer|reporter|editor|journalist|critic|correspondent|contributor|columnist|author|freelancer|host|redacteur|verslaggever)s?\b/i;
+const AUTHOR_BIO_FOLLOW_UP = /\b(joined|graduated|studied|has been (writing|covering)|passion|avid|thesis|previously|before joining|lives in)\b/i;
 const AUTHOR_BIO_EDGE_BLOCKS = 3;
 
 const SMALL_IMAGE_PX = 200;
@@ -137,15 +139,26 @@ export function cleanArticleContent(
   const paragraphs = Array.from(document.querySelectorAll("p"));
   const site = meta.siteName ? squash(meta.siteName) : "";
   const author = meta.byline ? squash(meta.byline.replace(/^(by|door)\s+/i, "")) : "";
-  for (const [i, p] of paragraphs.entries()) {
+  const isBio = (t: string) => t.length < 500 && AUTHOR_BIO_OPENING.test(t) && AUTHOR_ROLE.test(t.slice(0, 220));
+  for (let i = 0; i < paragraphs.length; i++) {
     const atStart = i < AUTHOR_BIO_EDGE_BLOCKS;
     const atEnd = i >= paragraphs.length - AUTHOR_BIO_EDGE_BLOCKS;
     if (!atStart && !atEnd) continue;
-    const t = text(p);
-    if (t.length >= 400 || !AUTHOR_BIO.test(t)) continue;
+    const t = text(paragraphs[i]);
+    if (!isBio(t)) continue;
     const flat = squash(t);
     const namesSource = (site.length > 2 && flat.includes(site)) || (author.length > 2 && flat.startsWith(author));
-    if ((atEnd && !atStart) || namesSource) p.remove();
+    if (!((atEnd && !atStart) || namesSource)) continue;
+
+    paragraphs[i].remove();
+    // Bios often run on for another paragraph or two ("Felipe is a writer who…", "He graduated in…").
+    const firstName = t.split(" ")[0];
+    while (i + 1 < paragraphs.length) {
+      const next = text(paragraphs[i + 1]);
+      const sameSubject = next.startsWith(`${firstName} `) || /^(He|She|They|His|Her|Their)\b/.test(next);
+      if (!sameSubject || next.length >= 500 || !(AUTHOR_BIO_FOLLOW_UP.test(next) || isBio(next))) break;
+      paragraphs[++i].remove();
+    }
   }
 
   return document.body.innerHTML;
