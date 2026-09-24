@@ -3,6 +3,7 @@ import { parseHTML } from "linkedom";
 import sanitizeHtml from "sanitize-html";
 import { cleanHtmlText } from "@/lib/html-text";
 import { assertSafePublicUrl } from "@/lib/net-safety";
+import { cleanArticleContent, stripPageClutter } from "@/lib/article-cleanup";
 
 export type ExtractedArticle = {
   title: string | null;
@@ -99,12 +100,15 @@ export function parseArticleHtml(html: string, url: string): ExtractedArticle {
   let readable: ReturnType<Readability["parse"]> = null;
   try {
     const { document } = parseHTML(html);
-    if (document.documentElement) readable = new Readability(document as unknown as Document).parse();
+    if (document.documentElement) {
+      stripPageClutter(document as unknown as Document);
+      readable = new Readability(document as unknown as Document).parse();
+    }
   } catch (error) {
     console.warn("[extract-article] readability failed", url, error);
   }
 
-  const cleaned = readable?.content ? sanitizeArticleHtml(readable.content, url) : "";
+  const cleaned = readable?.content ? sanitizeArticleHtml(cleanArticleContent(readable.content, image_url), url) : "";
   const textLength = cleanHtmlText(cleaned).length;
 
   return {

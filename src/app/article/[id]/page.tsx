@@ -108,7 +108,7 @@ export default async function ArticlePage({
 
       {extracted?.html && (
         <div
-          className="prose prose-invert prose-lg mt-10 max-w-2xl prose-headings:font-bold prose-headings:tracking-[-0.02em] prose-p:leading-8 prose-a:text-white prose-a:decoration-white/40 prose-a:underline-offset-4 hover:prose-a:decoration-white prose-blockquote:border-white/40 prose-blockquote:font-normal prose-blockquote:not-italic prose-blockquote:text-white/80 [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none prose-img:w-full prose-figcaption:text-white/50"
+          className="prose prose-invert prose-lg mt-10 max-w-2xl prose-headings:font-bold prose-headings:tracking-[-0.02em] prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg prose-p:leading-8 prose-a:text-white prose-a:decoration-white/40 prose-a:underline-offset-4 hover:prose-a:decoration-white prose-blockquote:border-white/40 prose-blockquote:font-normal prose-blockquote:not-italic prose-blockquote:text-white/80 [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none prose-img:w-full prose-figcaption:text-white/50"
           dangerouslySetInnerHTML={{ __html: extracted.html }}
         />
       )}
