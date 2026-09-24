@@ -56,6 +56,9 @@ export default async function FeedPage({
       <FeedCards
         items={archived.items}
         createdAt={archived.created_at}
+        kind={archived.kind}
+        tips={archived.tips}
+        saved={archived.saved}
         archived
         olderDate={olderDate}
         newerDate={newerDate}
@@ -92,6 +95,9 @@ export default async function FeedPage({
     <FeedCards
       items={editionData.items}
       createdAt={editionData.created_at}
+      kind={editionData.kind}
+      tips={editionData.tips}
+      saved={editionData.saved}
       olderDate={olderDate}
       feedHref="/"
     />

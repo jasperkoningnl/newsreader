@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/generate",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/sunday",
+      "schedule": "0 7 * * 0"
     }
   ]
 }

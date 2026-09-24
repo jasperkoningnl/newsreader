@@ -5,6 +5,7 @@ import { articles, sources } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { extractArticleContent } from "@/lib/extract-article";
 import { cleanHtmlText } from "@/lib/html-text";
+import OpenTracker from "./open-tracker";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export default async function ArticlePage({
 
   return (
     <article className="mx-auto w-full max-w-3xl px-5 pb-20 pt-8 md:px-10 md:pt-12">
+      <OpenTracker articleId={article.id} />
       <Link href={feedHref} scroll={false} className="metadata-caps text-white/70 transition-colors hover:text-white">
         ← Back to feed
       </Link>

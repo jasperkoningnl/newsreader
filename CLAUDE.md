@@ -15,11 +15,15 @@ src/
       saved/            # Opgeslagen artikelen + losse links opslaan
       topics/           # Smaak-gewicht per onderwerp
       fetch-feeds/      # RSS-ophaal endpoint (ook cron-target)
+      cron/sunday/      # Zondageditie (zondag 07:00 UTC)
     sources/            # /sources pagina
     saved/              # /saved pagina
     taste/              # /taste pagina (smaak per onderwerp)
     save/               # /save?url=… (bookmarklet, share target)
-    page.tsx            # Feed (hoofdscherm)
+    page.tsx            # Feed (hoofdscherm; op zondag de zondageditie)
+  lib/
+    generate-edition.ts # Dagelijkse curator
+    generate-sunday.ts  # Zondageditie: weekhighlights + game- en serietip
   db/
     index.ts            # Drizzle client (Turso/libSQL)
     schema.ts           # Alle tabel-definities
