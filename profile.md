@@ -53,23 +53,15 @@ Gebaseerd op 548 IMDB-ratings (12x 10/10, 80x 9/10, 169x 8/10).
 
 ## Feedmix-voorkeuren
 
-De ideale feed van 10 items bevat bij benadering:
-- 2-3 tech/AI-artikelen (waarvan minstens 1 hands-on/tool-gericht)
-- 1-2 serie/film/streaming-nieuws of recensies
-- 1-2 wereldnieuws of geopolitiek (longread of analyse, geen breaking news)
-- 1 sport (voetbal, tactisch/analytisch, of een goed achtergrondverhaal)
-- 1 gaming of interactieve media (reviews, achtergrondverhalen, industrie)
-- 1 verrassingscategorie (wetenschap, retro-esthetiek, kaart, muziek, lokaal, filosofie)
-- 0-1 viral longread, non-fictie boekentip, of cultureel essay
+Hoeveel items elke categorie krijgt (min–max per editie van 10) staat in de app op het Taste-tabblad, niet hier. Wat de curator binnen die mix moet weten:
 
-### Regels
-- Nooit meer dan 3 items uit dezelfde categorie
-- Altijd minstens 1 Nederlandstalig item
-- Minstens 1 longread (>5 min leestijd)
+- Tech/AI: minstens 1 hands-on of tool-gericht stuk
+- Wereldnieuws en geopolitiek: longread of analyse, geen breaking news
+- Sport: voetbal, tactisch/analytisch, of een goed achtergrondverhaal
+- Games: reviews, achtergrondverhalen, industrie
+- De verrassing mag wisselen en mag buiten het profiel vallen (wetenschap, retro-esthetiek, kaart, muziek, lokaal, filosofie), dat is de serendipity-factor
 - Viral longreads zijn altijd welkom, ongeacht categorie
 - Non-fictie boekentips mogen altijd mee in de mix
-- Maximaal 2 breaking-news-achtige items, de rest moet tijdloos genoeg zijn om een dag later nog te lezen
-- De "verrassingscategorie" mag wisselen en mag buiten het profiel vallen, dat is de serendipity-factor
 
 ## Bronnencatalogus
 

@@ -65,6 +65,10 @@ CREATE TABLE editions (
 
 Likes/dislikes op artikelniveau (`article_likes`) en opgeslagen artikelen (`saved_articles`). Zie `src/db/schema.ts`.
 
+### category_mix (mix per categorie)
+
+`category` (PK), `min`, `max`. Alleen categorieën die Jasper heeft aangepast; de rest volgt de standaard in `src/lib/category-mix.ts`.
+
 ### topics (smaak-onderwerpen)
 
 Specifieke onderwerpen ("Apple: iPhone- en iOS-productnieuws", "Star Trek-series") die Haiku toekent aan artikelen die Jasper liket, dislikt of bewaart (`articles.topic_id`). `manual_weight` (-2 t/m 2) is null zolang het gewicht automatisch uit de signalen volgt. Zie `src/lib/taste.ts`.
@@ -116,7 +120,9 @@ Een losse link wordt een `articles`-rij met `read=1` (komt niet in de feed). Onb
 
 ### 4. Smaak — `/taste`
 
-Per onderwerp een schuif: Never, Less, Neutral, More, Lots.
+**Mix per categorie:** per categorie van een actieve bron een min en max (aantal items in de editie van 10), met plus/min-knoppen. Standaard (`src/lib/category-mix.ts`): tech 2–3, series 1–2, news/nieuws 1–2, local 1–2, sport/games/wetenschap/cultuur 0–1, overige 0–2. Aangepaste waarden staan in `category_mix`; zonder rij geldt de standaard. De som van de minimums mag niet boven 10.
+
+**Onderwerpen:** per onderwerp een schuif: Never, Less, Neutral, More, Lots.
 - Automatisch: likes (+1), bewaard (+2) en dislikes (−1,5) per onderwerp, met een halfwaardetijd van 90 dagen. Twee recente dislikes zonder tegengewicht = Never.
 - Verschuift Jasper een schuif, dan is die stand leidend tot hij terugzet naar automatisch.
 - Daaronder, alleen-lezen: welke bronnen en categorieën door de duimen voorrang of juist minder krijgen.
@@ -164,14 +170,13 @@ wat relevant is.
 > reduceert daarna naar 10 items na constraint-enforcement (15 → 10) voor betere variatie.
 
 Regels:
-- Nooit meer dan 3 items uit dezelfde categorie
-- Altijd minstens 1 Nederlandstalig item
+- Per categorie het min en max van het Taste-tabblad (local = Nederlandstalig, standaard min 1)
 - Minstens 1 longread (>5 min leestijd, schat in op basis van beschrijving)
 - Maximaal 2 breaking-news items
 - 1 verrassingsitem dat buiten de verwachte interesses valt
 - Viral longreads en boekentips zijn altijd welkom
 
-Gewenste mix: [uit profile.md]
+Mix per categorie: [uit category_mix + standaard]
 
 Antwoord als JSON array van article IDs in de gewenste volgorde,
 met per item een korte motivatie (1 zin) waarom dit item is gekozen.
@@ -200,6 +205,8 @@ POST /api/articles/:id/like  — Like (body: { liked: true }) of dislike (body: 
 POST /api/articles/:id/save  — Artikel uit de feed opslaan
 
 PUT  /api/topics/:id          — Smaak-gewicht zetten (body: { weight: -2..2 | null }, null = automatisch)
+PUT  /api/category-mix/:cat   — Mix voor een categorie zetten (body: { min, max })
+DEL  /api/category-mix/:cat   — Terug naar de standaard
 
 POST /api/fetch-feeds         — Handmatig feeds ophalen (wordt ook door cron aangeroepen)
 ```
@@ -261,9 +268,10 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 
 ### Korte termijn (volgorde gedreven door afhankelijkheid)
 
-1. **Categorie-mix instelbaar op het Taste-tabblad** — min/max per categorie (bijv. tech 2–3), standaard de huidige mix. Vervangt de mix-regels die nu dubbel staan (hardcoded prompt in `generate-edition.ts` + `profile.md`) en maakt de categorie-cap in `enforceConstraints` configureerbaar. Aandachtspunt: `articles.category` is de categorie van de bron, dus een serie-stuk op The Verge telt als tech.
-2. **Feedback per editie zichtbaar maken** — het Taste-tabblad toont nu de stand per onderwerp; per editie tonen welke items door smaak zijn weggefilterd of voorrang kregen staat alleen nog in de `[edition.generated]`-log (`taste.removed`).
-3. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
+1. **Categorie per artikel in plaats van per bron** — `articles.category` is de categorie van de bron, dus een serie-stuk op The Verge telt als tech in de mix. Haiku zou de categorie per kandidaat kunnen bepalen (kan mee in de bestaande match-call).
+2. **Verrassings-regel repareren** — `isSurprise` kijkt naar een vaste lijst Nederlandse categorienamen (`EXPECTED_CATEGORIES`). Als bronnen Engelse namen hebben (`news`, `sports`, `science`), telt elk item daaruit als verrassing en is de regel zinloos. Check de categorienamen in productie en leid "verwacht" liever af uit de mix.
+3. **Feedback per editie zichtbaar maken** — het Taste-tabblad toont nu de stand per onderwerp; per editie tonen welke items door smaak zijn weggefilterd of voorrang kregen staat alleen nog in de `[edition.generated]`-log (`taste.removed`).
+4. **Wekelijkse digest** — aggregaten van saved + liked artikelen van afgelopen week + 1-2 surprise-picks via de bestaande curator-flow. Mail-preview met link naar in-app weekly view.
 
 ### Verder weg
 
@@ -285,5 +293,6 @@ CRON_SECRET=...              — beveiligt de cron endpoint
 - ~~Bluesky als signaal-bron~~ — `src/lib/ingest-bluesky.ts` + `src/lib/bluesky.ts`, zelfde promote-pad als Reddit.
 - ~~Reader-mode voor niet-paywalled artikelen~~ — server-side via `@mozilla/readability` + `linkedom` in `src/lib/extract-article.ts`; HTML wordt met `sanitize-html` op een allowlist gezet (koppen, lijsten, citaten, links, afbeeldingen) en opgemaakt met `@tailwindcss/typography`.
 - ~~Losse links opslaan~~ — `/save` + bookmarklet, Android-deelmenu (PWA share target), iOS via Shortcut.
+- ~~Categorie-mix instelbaar~~ — min/max per categorie op het Taste-tabblad (`category_mix`), hard afgedwongen in `enforceConstraints`; vervangt de vaste mix in de curator-prompt, de "max 3 per categorie"-regel, de losse NL-regel (nu min van `local`) en de cijfers in `profile.md`. De regels worden nu over de uiteindelijke 10 items gecontroleerd (eerder over 15, waarna afkappen een afgedwongen item kon laten wegvallen).
 - ~~Smaak per onderwerp (Taste-tabblad)~~ — Haiku labelt gelikete/gedislikete/bewaarde artikelen met een specifiek onderwerp; per onderwerp een automatisch of handmatig gewicht; Never filtert vóór de curator. Bewaarde artikelen tellen nu mee (zwaarder dan een like). Bron- en categoriestraf alleen nog bij ≥3 dislikes en meer dislikes dan likes.
 - ~~Likes beïnvloeden kandidaatvolgorde~~ — de score-sortering werd direct door de shuffle overschreven; nu eerst shuffle, dan stabiele sortering op score.

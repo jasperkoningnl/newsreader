@@ -22,6 +22,12 @@ export const topics = sqliteTable("topics", {
   created_at: text("created_at").default(sql`(datetime('now'))`),
 });
 
+export const category_mix = sqliteTable("category_mix", {
+  category: text("category").primaryKey(),
+  min: integer("min").notNull(),
+  max: integer("max").notNull(),
+});
+
 export const articles = sqliteTable("articles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   source_id: integer("source_id").references(() => sources.id),
@@ -89,6 +95,7 @@ export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 export type Topic = typeof topics.$inferSelect;
 export type NewTopic = typeof topics.$inferInsert;
+export type CategoryMix = typeof category_mix.$inferSelect;
 export type Article = typeof articles.$inferSelect;
 export type NewArticle = typeof articles.$inferInsert;
 export type Edition = typeof editions.$inferSelect;
