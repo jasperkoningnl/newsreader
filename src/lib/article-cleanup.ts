@@ -6,6 +6,22 @@ const CLUTTER_TOKEN =
 const CLUTTER_LABEL =
   /^(follow|following|share|copy link|sign up|sign in|subscribe|advertisement|ad|read more|related|recommended|more from|most popular|see more|see all|continue reading)\b/i;
 const CLUTTER_PHRASE = /(link copied|copied to clipboard|newsletter|free sign ?up|sign up for|subscribe to|advertisement)/i;
+// Specific enough to also remove somewhat longer blocks without hitting normal article sentences.
+const CALL_TO_ACTION = new RegExp(
+  [
+    "(sign[ -]?up|subscribe|register)\\b[^.!?]{0,60}\\b(newsletter|mailing list|inbox|updates)",
+    "free (sign[ -]?up|newsletter)",
+    "\\b(join|follow|find) us on\\b",
+    "\\b(telegram|whatsapp|discord|signal) (channel|group|community)",
+    "download (our|the) app",
+    "support (our|independent) journalism",
+    "become a (member|subscriber|supporter)",
+    "(delivered|straight) (to|into) your inbox",
+    "meld je aan voor (de|onze) nieuwsbrief",
+    "volg ons op",
+  ].join("|"),
+  "i"
+);
 
 const SMALL_IMAGE_PX = 200;
 const LOOSE_IMAGE_MIN_PX = 600;
@@ -82,10 +98,16 @@ export function cleanArticleContent(html: string, heroImageUrl: string | null): 
     img.remove();
   }
 
-  for (const el of Array.from(document.querySelectorAll("p, li, div, span, h2, h3, h4, h5, h6, figcaption"))) {
+  for (const el of Array.from(document.querySelectorAll("p, li, div, section, blockquote, span, h2, h3, h4, h5, h6, figcaption"))) {
     if (!el.isConnected) continue;
     const t = text(el);
-    if ((t.length < 40 && CLUTTER_LABEL.test(t)) || (t.length < 160 && CLUTTER_PHRASE.test(t))) el.remove();
+    if (
+      (t.length < 40 && CLUTTER_LABEL.test(t)) ||
+      (t.length < 160 && CLUTTER_PHRASE.test(t)) ||
+      (t.length < 300 && CALL_TO_ACTION.test(t))
+    ) {
+      el.remove();
+    }
   }
 
   for (const list of Array.from(document.querySelectorAll("ul, ol"))) {
