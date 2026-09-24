@@ -6,6 +6,26 @@ const CLUTTER_TOKEN =
 const CLUTTER_LABEL =
   /^(follow|following|share|copy link|sign up|sign in|subscribe|advertisement|ad|read more|related|recommended|more from|most popular|see more|see all|continue reading)\b/i;
 const CLUTTER_PHRASE = /(link copied|copied to clipboard|newsletter|free sign ?up|sign up for|subscribe to|advertisement)/i;
+// Specific enough to also remove somewhat longer blocks without hitting normal article sentences.
+const CALL_TO_ACTION = new RegExp(
+  [
+    "(sign[ -]?up|subscribe|register)\\b[^.!?]{0,60}\\b(newsletter|mailing list|inbox|updates)",
+    "free (sign[ -]?up|newsletter)",
+    "\\b(join|follow|find) us on\\b",
+    "\\b(telegram|whatsapp|discord|signal) (channel|group|community)",
+    "download (our|the) app",
+    "support (our|independent) journalism",
+    "become a (member|subscriber|supporter)",
+    "(delivered|straight) (to|into) your inbox",
+    "meld je aan voor (de|onze) nieuwsbrief",
+    "volg ons op",
+  ].join("|"),
+  "i"
+);
+
+const AUTHOR_BIO =
+  /^([A-Z][\p{L}'.-]+ ){1,3}(is|was) (a|an|the|our)\b.{0,160}\b(writer|reporter|editor|journalist|critic|correspondent|contributor|columnist|author|freelancer|host|redacteur|verslaggever)s?\b/u;
+const AUTHOR_BIO_EDGE_BLOCKS = 3;
 
 const SMALL_IMAGE_PX = 200;
 const LOOSE_IMAGE_MIN_PX = 600;
@@ -54,7 +74,15 @@ export function stripPageClutter(document: Document): void {
 }
 
 // After Readability: remove leftovers that only make sense on the original site.
-export function cleanArticleContent(html: string, heroImageUrl: string | null): string {
+function squash(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+export function cleanArticleContent(
+  html: string,
+  heroImageUrl: string | null,
+  meta: { byline: string | null; siteName: string | null }
+): string {
   const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
   const heroKey = imageKey(heroImageUrl);
 
@@ -82,10 +110,16 @@ export function cleanArticleContent(html: string, heroImageUrl: string | null): 
     img.remove();
   }
 
-  for (const el of Array.from(document.querySelectorAll("p, li, div, span, h2, h3, h4, h5, h6, figcaption"))) {
+  for (const el of Array.from(document.querySelectorAll("p, li, div, section, blockquote, span, h2, h3, h4, h5, h6, figcaption"))) {
     if (!el.isConnected) continue;
     const t = text(el);
-    if ((t.length < 40 && CLUTTER_LABEL.test(t)) || (t.length < 160 && CLUTTER_PHRASE.test(t))) el.remove();
+    if (
+      (t.length < 40 && CLUTTER_LABEL.test(t)) ||
+      (t.length < 160 && CLUTTER_PHRASE.test(t)) ||
+      (t.length < 300 && CALL_TO_ACTION.test(t))
+    ) {
+      el.remove();
+    }
   }
 
   for (const list of Array.from(document.querySelectorAll("ul, ol"))) {
@@ -95,6 +129,23 @@ export function cleanArticleContent(html: string, heroImageUrl: string | null): 
       return links.length > 0 && links.map(text).join(" ") === text(li);
     });
     if (allLinks) list.remove();
+  }
+
+  // Author bios ("Jane Doe is a movie and TV writer at …") sit at the very end of the piece, or at the
+  // very start. A real lead can read the same ("Sally Rooney is a writer who…"), so at the start the
+  // paragraph must also name the site or the article's own author.
+  const paragraphs = Array.from(document.querySelectorAll("p"));
+  const site = meta.siteName ? squash(meta.siteName) : "";
+  const author = meta.byline ? squash(meta.byline.replace(/^(by|door)\s+/i, "")) : "";
+  for (const [i, p] of paragraphs.entries()) {
+    const atStart = i < AUTHOR_BIO_EDGE_BLOCKS;
+    const atEnd = i >= paragraphs.length - AUTHOR_BIO_EDGE_BLOCKS;
+    if (!atStart && !atEnd) continue;
+    const t = text(p);
+    if (t.length >= 400 || !AUTHOR_BIO.test(t)) continue;
+    const flat = squash(t);
+    const namesSource = (site.length > 2 && flat.includes(site)) || (author.length > 2 && flat.startsWith(author));
+    if ((atEnd && !atStart) || namesSource) p.remove();
   }
 
   return document.body.innerHTML;

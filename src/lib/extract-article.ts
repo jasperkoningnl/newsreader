@@ -108,15 +108,19 @@ export function parseArticleHtml(html: string, url: string): ExtractedArticle {
     console.warn("[extract-article] readability failed", url, error);
   }
 
-  const cleaned = readable?.content ? sanitizeArticleHtml(cleanArticleContent(readable.content, image_url), url) : "";
+  const byline = readable?.byline ? cleanHtmlText(readable.byline) : null;
+  const site_name = extractMeta(html, "og:site_name") ?? (readable?.siteName ? cleanHtmlText(readable.siteName) : null);
+  const cleaned = readable?.content
+    ? sanitizeArticleHtml(cleanArticleContent(readable.content, image_url, { byline, siteName: site_name }), url)
+    : "";
   const textLength = cleanHtmlText(cleaned).length;
 
   return {
     title: metaTitle ?? (readable?.title ? cleanHtmlText(readable.title) : null),
     excerpt: metaExcerpt ?? (readable?.excerpt ? cleanHtmlText(readable.excerpt) : null),
     image_url,
-    byline: readable?.byline ? cleanHtmlText(readable.byline) : null,
-    site_name: extractMeta(html, "og:site_name") ?? (readable?.siteName ? cleanHtmlText(readable.siteName) : null),
+    byline,
+    site_name,
     html: textLength >= 400 ? cleaned : null,
   };
 }
